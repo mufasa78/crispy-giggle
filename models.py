@@ -26,7 +26,8 @@ class Job(db.Model):
     id = Column(Integer, primary_key=True)
     vendor_job_id = Column(String(64), unique=True, nullable=False)
     user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
-    status = Column(String(20), nullable=False, default='processing')  # processing, success, failure
+    status = Column(String(20), nullable=False, default='processing')  # processing, success, failure, cancelled, queued
+    cancelled = Column(Boolean, default=False, nullable=False)  # Flag to indicate if job was cancelled
     created_at = Column(DateTime, default=datetime.utcnow)
     completed_at = Column(DateTime, nullable=True)
     

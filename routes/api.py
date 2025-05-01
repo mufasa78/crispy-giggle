@@ -6,7 +6,7 @@ from datetime import datetime
 
 from app import db
 from models import Job, Deal, Product, BillingRecord, User
-from services.job_service import process_job, get_job_result
+from services.job_service import process_job, get_job_result, cancel_job
 from utils.auth import api_key_required
 
 # Create blueprint for API routes
@@ -139,6 +139,70 @@ def create_job():
             'success': False,
             'code': 'server_error',
             'message': 'An error occurred while creating the job'
+        }), 500
+
+@api_bp.route('/job/cancel/<vendor_job_id>', methods=['POST'])
+@api_key_required
+def cancel_job_api(vendor_job_id):
+    """
+    Cancel a job that is in progress
+    """
+    try:
+        # Get current user from API key
+        current_user = request.current_user
+        
+        # Get job by vendor_job_id
+        job = Job.query.filter_by(vendor_job_id=vendor_job_id).first()
+        
+        if not job:
+            return jsonify({
+                'success': False,
+                'code': 'job_not_found',
+                'message': f'Job with ID {vendor_job_id} not found'
+            }), 404
+        
+        # Check if user owns the job
+        if job.user_id != current_user.id:
+            return jsonify({
+                'success': False,
+                'code': 'unauthorized',
+                'message': 'You do not have permission to cancel this job'
+            }), 403
+        
+        # Check if job is already completed
+        if job.status in ('success', 'failure', 'cancelled'):
+            return jsonify({
+                'success': False,
+                'code': 'job_already_completed',
+                'message': f'Job is already in state: {job.status} and cannot be cancelled'
+            }), 400
+        
+        # Cancel the job
+        result = cancel_job(job.id)
+        
+        if result:
+            return jsonify({
+                'success': True,
+                'code': None,
+                'message': None,
+                'data': {
+                    'vendor_job_id': vendor_job_id,
+                    'status': 'cancelled'
+                }
+            }), 200
+        else:
+            return jsonify({
+                'success': False,
+                'code': 'cancel_error',
+                'message': 'Failed to cancel the job'
+            }), 500
+        
+    except Exception as e:
+        logger.error(f"Error cancelling job: {str(e)}")
+        return jsonify({
+            'success': False,
+            'code': 'server_error',
+            'message': 'An error occurred while cancelling the job'
         }), 500
 
 @api_bp.route('/job/result/<vendor_job_id>', methods=['GET'])

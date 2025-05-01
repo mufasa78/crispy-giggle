@@ -13,6 +13,9 @@ from config import JOB_BATCH_SIZE, MAX_CONCURRENT_REQUESTS, WORKER_THREADS, MAX_
 # Create a job queue to manage concurrent jobs
 job_queue = queue.Queue(maxsize=MAX_JOBS_IN_QUEUE)
 
+# Set to track currently active jobs for cancellation
+active_jobs = set()
+
 # Flag to track if worker threads have been started
 workers_started = False
 
@@ -103,17 +106,69 @@ def _retry_add_job(job_id):
                 job.completed_at = datetime.utcnow()
                 db.session.commit()
 
+def cancel_job(job_id):
+    """
+    Cancel a job that is in progress or queued
+    """
+    try:
+        with app.app_context():
+            # Get the job
+            job = Job.query.get(job_id)
+            
+            if not job:
+                logger.error(f"Job with ID {job_id} not found")
+                return False
+                
+            # Check if job is already completed
+            if job.status in ('success', 'failure', 'cancelled'):
+                logger.warning(f"Cannot cancel job {job_id} because it is already in state: {job.status}")
+                return False
+                
+            # Mark job as cancelled
+            job.cancelled = True
+            job.status = 'cancelled'
+            job.completed_at = datetime.utcnow()
+            db.session.commit()
+            
+            logger.info(f"Job {job_id} has been marked as cancelled")
+            
+            # Update any unprocessed deals to cancelled state
+            unprocessed_deals = Deal.query.filter(Deal.job_id == job_id, Deal.status == 1).all()
+            for deal in unprocessed_deals:
+                deal.status = 3  # failure
+                deal.error_message = "Job cancelled by user"
+                deal.processed_at = datetime.utcnow()
+            
+            db.session.commit()
+            logger.info(f"Updated {len(unprocessed_deals)} unprocessed deals for cancelled job {job_id}")
+            
+            return True
+            
+    except Exception as e:
+        logger.error(f"Error cancelling job {job_id}: {str(e)}")
+        return False
+
 def _process_job_async(job_id):
     """
     Internal function to process a job asynchronously
     """
     # Note: Application context is already provided by the worker thread
     try:
+        # Add to active jobs
+        active_jobs.add(job_id)
+        
         # Get job
         job = Job.query.get(job_id)
         
         if not job:
             logger.error(f"Job with ID {job_id} not found")
+            active_jobs.discard(job_id)
+            return False
+        
+        # Check if job was cancelled
+        if job.cancelled:
+            logger.info(f"Job {job_id} was cancelled, skipping processing")
+            active_jobs.discard(job_id)
             return False
         
         # Update job status to processing if not already
@@ -129,6 +184,7 @@ def _process_job_async(job_id):
             job.status = 'failure'
             job.completed_at = datetime.utcnow()
             db.session.commit()
+            active_jobs.discard(job_id)
             return False
         
         # Process deals in batches to avoid memory issues
@@ -141,6 +197,13 @@ def _process_job_async(job_id):
         
         # Process in batches for better memory management and database performance
         for i in range(0, total_deals, JOB_BATCH_SIZE):
+            # Check if job was cancelled mid-processing
+            job = Job.query.get(job_id)
+            if job.cancelled:
+                logger.info(f"Job {job_id} was cancelled during processing, stopping at {processed_deals}/{total_deals} deals")
+                active_jobs.discard(job_id)
+                return False
+                
             batch = deals[i:i+JOB_BATCH_SIZE]
             batch_size = len(batch)
             
@@ -170,6 +233,16 @@ def _process_job_async(job_id):
                     except Exception as exc:
                         logger.error(f"Deal {deal.id} generated an exception: {exc}")
                         failure_count += 1
+                        
+                    # Periodically check if job was cancelled
+                    if processed_deals % 100 == 0:
+                        # Refresh job to check cancelled flag
+                        job = Job.query.get(job_id)
+                        if job.cancelled:
+                            logger.info(f"Job {job_id} was cancelled during batch processing, stopping at {processed_deals}/{total_deals} deals")
+                            executor.shutdown(wait=False)  # Attempt to shut down the executor without waiting
+                            active_jobs.discard(job_id)
+                            return False
             
             # Commit changes after each batch and update job progress
             job.status = 'processing'
@@ -191,7 +264,7 @@ def _process_job_async(job_id):
         db.session.commit()
         
         logger.info(f"Job {job_id} completed: {success_count} successes, {failure_count} failures")
-        
+        active_jobs.discard(job_id)
         return True
         
     except Exception as e:
@@ -206,7 +279,9 @@ def _process_job_async(job_id):
                 db.session.commit()
         except Exception as inner_e:
             logger.error(f"Failed to update job status: {str(inner_e)}")
-            
+        
+        # Always remove from active jobs set when done
+        active_jobs.discard(job_id)
         return False
 
 def _process_deal(deal_id):
