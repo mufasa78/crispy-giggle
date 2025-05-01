@@ -11,6 +11,7 @@ from urllib3.util import Retry
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
 from bs4 import BeautifulSoup
+from requests_html import HTMLSession
 
 from config import (SHOPEE_BASE_URL, REQUEST_TIMEOUT, RETRY_ATTEMPTS, 
                   RETRY_DELAY, MAX_CONCURRENT_REQUESTS)
@@ -394,25 +395,115 @@ class ShopeeService:
             return {"error": f"Unexpected error: {str(e)}"}
     
     @staticmethod
+    def _fetch_product_data_api(shop_id, item_id):
+        """
+        Fetch product data using a direct API call to Shopee's API
+        """
+        api_url = f"https://shopee.tw/api/v4/item/get?itemid={item_id}&shopid={shop_id}"
+        logger.info(f"Fetching product with direct API call for {shop_id}.{item_id}")
+        
+        try:
+            # Add some randomness to the user agent to avoid blocking
+            user_agents = [
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/92.0.4515.107 Safari/537.36',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0',
+            ]
+            
+            headers = {
+                'User-Agent': random.choice(user_agents),
+                'Accept': 'application/json',
+                'Accept-Language': 'en-US,en;q=0.9,zh-TW;q=0.8,zh;q=0.7',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+                'Referer': f'https://shopee.tw/product/{shop_id}/{item_id}',
+                'Origin': 'https://shopee.tw',
+                'sec-ch-ua': '" Not A;Brand";v="99", "Chromium";v="90"',
+                'sec-ch-ua-mobile': '?0',
+                'sec-fetch-dest': 'empty',
+                'sec-fetch-mode': 'cors',
+                'sec-fetch-site': 'same-origin'
+            }
+            
+            cookies = {
+                'SPC_F': 'your-random-id',  # This is just a placeholder
+                'SPC_SI': 'mall.abcdefghijklmnopqrstuvwxyz',  # This is just a placeholder
+                '_gcl_au': '1.1.123456789.1234567890',
+                '_med': 'refer', 
+                'language': 'en',
+                'csrftoken': 'random-csrf-token'
+            }
+            
+            response = session.get(api_url, headers=headers, cookies=cookies, timeout=30)
+            logger.info(f"API response status: {response.status_code}")
+            
+            if response.status_code == 200:
+                try:
+                    data = response.json()
+                    if data and 'data' in data and 'item' in data['data']:
+                        logger.info(f"Successfully extracted product data from API for {shop_id}.{item_id}")
+                        
+                        # Image processing - Shopee stores partial URLs that need to be completed
+                        item_data = data['data']['item']
+                        if 'images' in item_data and item_data['images']:
+                            full_images = []
+                            for img in item_data['images']:
+                                if img:
+                                    # Transform image URLs to full URLs if needed
+                                    if img.startswith('http'):
+                                        full_images.append(img)
+                                    else:
+                                        # Construct the full image URL based on Shopee's pattern
+                                        full_url = f"https://cf.shopee.tw/file/{img}"
+                                        full_images.append(full_url)
+                            item_data['images'] = full_images
+                            
+                        return data
+                except Exception as json_error:
+                    logger.warning(f"JSON parsing error: {str(json_error)}")
+                    return {"error": f"JSON parsing error: {str(json_error)}"}
+            
+            return {"error": f"API request failed with status code: {response.status_code}"}
+        except Exception as e:
+            logger.error(f"Error fetching product from API for {shop_id}.{item_id}: {str(e)}")
+            return {"error": f"Failed to fetch product from API: {str(e)}"}
+    
+    @staticmethod
     def fetch_product_data(shop_id, item_id):
         """
-        Fetch product data from Shopee API with built-in caching
+        Fetch product data from Shopee with built-in caching and fallbacks
         """
         # Add jitter to avoid thundering herd problem if caching expires
         jitter = random.uniform(0, 0.5)  # Add up to 0.5 seconds of jitter
         time.sleep(jitter)
         
-        # Call the cached version
+        # Try the standard method first
         data = ShopeeService._fetch_product_data_cached(shop_id, item_id)
         
-        # Check if we got an error response and handle appropriately
+        # Check if we got a valid response or need to try other methods
+        if isinstance(data, dict):
+            # Check if there was an error or if we got empty data
+            item_data = data.get('data', {}).get('item', {})
+            if "error" in data or not item_data.get('name'):
+                # If failed, clear cache and try with JavaScript rendering
+                logger.warning(f"Standard method failed for {shop_id}.{item_id}, trying JavaScript rendering")
+                ShopeeService._fetch_product_data_cached.cache_clear()
+                
+                # Try with JavaScript rendering
+                try:
+                    js_data = ShopeeService._fetch_product_data_with_js(shop_id, item_id)
+                    if isinstance(js_data, dict) and not "error" in js_data:
+                        return js_data
+                    else:
+                        # If JavaScript rendering also failed, try standard method one more time
+                        data = ShopeeService._fetch_product_data_cached(shop_id, item_id)
+                except Exception as js_error:
+                    logger.error(f"JavaScript rendering failed: {str(js_error)}")
+                    # Try standard method one more time
+                    data = ShopeeService._fetch_product_data_cached(shop_id, item_id)
+        
+        # If we still have an error, raise an exception
         if isinstance(data, dict) and "error" in data:
-            logger.warning(f"Error in cached response for {shop_id}.{item_id}: {data.get('error')}")
-            # If there's an error in the cached response, try clearing the cache entry
-            ShopeeService._fetch_product_data_cached.cache_clear()
-            # Make one more attempt without the cache
-            data = ShopeeService._fetch_product_data_cached(shop_id, item_id)
-            if isinstance(data, dict) and "error" in data:
-                raise Exception(f"Failed to fetch product data: {data.get('error')}")
+            raise Exception(f"Failed to fetch product data: {data.get('error')}")
         
         return data

@@ -14,4 +14,5 @@ dependencies = [
     "trafilatura>=2.0.0",
     "urllib3>=2.4.0",
     "beautifulsoup4>=4.13.4",
+    "requests-html>=0.10.0",
 ]
