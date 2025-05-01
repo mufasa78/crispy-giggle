@@ -4,11 +4,13 @@ import json
 import time
 import random
 import functools
+import trafilatura
 from urllib.parse import urlparse, parse_qs
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
 from functools import lru_cache
 from concurrent.futures import ThreadPoolExecutor
+from bs4 import BeautifulSoup
 
 from config import (SHOPEE_BASE_URL, REQUEST_TIMEOUT, RETRY_ATTEMPTS, 
                   RETRY_DELAY, MAX_CONCURRENT_REQUESTS)
@@ -62,14 +64,20 @@ class ShopeeService:
     def extract_ids_from_url(shopee_url):
         """
         Extract item_id and shop_id from Shopee URL
-        Example: https://shopee.tw/---i.104581011.24901963692
+        Examples: 
+        - https://shopee.tw/---i.104581011.24901963692
+        - https://shopee.tw/---i.104911467.5684470744
         """
         try:
+            # Log the URL for debugging
+            logger.info(f"Extracting IDs from URL: {shopee_url}")
+            
             # Parse URL
             parsed_url = urlparse(shopee_url)
             
             # Extract path
             path = parsed_url.path
+            logger.debug(f"URL path: {path}")
             
             # Find the pattern -i.{shop_id}.{item_id}
             if '-i.' in path:
@@ -79,13 +87,38 @@ class ShopeeService:
                     if len(id_parts) == 2:
                         shop_id = id_parts[0]
                         item_id = id_parts[1]
+                        logger.info(f"Successfully extracted shop_id={shop_id}, item_id={item_id} from URL")
                         return shop_id, item_id
+            
+            # If we couldn't extract from path using -i. pattern, try other patterns
+            # For example, some URLs might have pattern product-i{shop_id}.{item_id}
+            if 'product-i' in path:
+                parts = path.split('product-i')
+                if len(parts) == 2 and '.' in parts[1]:
+                    id_parts = parts[1].split('.')
+                    if len(id_parts) == 2:
+                        shop_id = id_parts[0]
+                        item_id = id_parts[1]
+                        logger.info(f"Successfully extracted shop_id={shop_id}, item_id={item_id} from URL using product-i pattern")
+                        return shop_id, item_id
+            
+            # Try a different approach for URLs that don't match the standard format
+            # Look for a pattern of numbers separated by a dot
+            import re
+            # Find all patterns of numbers.numbers in the URL
+            matches = re.findall(r'(\d+)\.(\d+)', shopee_url)
+            if matches:
+                # Assume the last match is the one we want
+                shop_id, item_id = matches[-1]
+                logger.info(f"Using regex, extracted shop_id={shop_id}, item_id={item_id} from URL")
+                return shop_id, item_id
             
             # If we couldn't extract from path, check query parameters
             query_params = parse_qs(parsed_url.query)
             if 'itemid' in query_params and 'shopid' in query_params:
                 item_id = query_params['itemid'][0]
                 shop_id = query_params['shopid'][0]
+                logger.info(f"Successfully extracted shop_id={shop_id}, item_id={item_id} from URL query parameters")
                 return shop_id, item_id
                 
             raise ValueError(f"Could not extract shop_id and item_id from URL: {shopee_url}")
@@ -99,9 +132,11 @@ class ShopeeService:
     @lru_cache(maxsize=1000)
     def _fetch_product_data_cached(shop_id, item_id):
         """
-        Cached version of product data fetch
+        Cached version of product data fetch using web scraping
+        since the direct API gives 403 Forbidden errors
         """
-        url = f"{SHOPEE_BASE_URL}?itemid={item_id}&shopid={shop_id}"
+        # Create product page URL
+        product_url = f"https://shopee.tw/product/{shop_id}/{item_id}"
         
         # Add some randomness to the user agent to avoid blocking
         user_agents = [
@@ -113,39 +148,95 @@ class ShopeeService:
         
         headers = {
             'User-Agent': random.choice(user_agents),
-            'Accept': 'application/json',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9,zh-TW;q=0.8,zh;q=0.7',
-            'Referer': f'https://shopee.tw/product/{shop_id}/{item_id}',
-            'Origin': 'https://shopee.tw',
-            # Add some randomized headers
             'Cache-Control': 'max-age=0',
             'Sec-Ch-Ua': '"Chromium";v="92", " Not A;Brand";v="99", "Google Chrome";v="92"',
             'Sec-Ch-Ua-Mobile': '?0',
             'Sec-Fetch-Dest': 'document',
             'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'same-origin',
+            'Sec-Fetch-Site': 'none',
             'Sec-Fetch-User': '?1',
             'Upgrade-Insecure-Requests': '1'
         }
         
         try:
-            # Use the session with connection pooling and auto-retry
-            response = session.get(url, headers=headers, timeout=REQUEST_TIMEOUT)
+            # Try scraping with trafilatura first (best option)
+            try:
+                logger.info(f"Fetching product page for {shop_id}.{item_id} using trafilatura")
+                downloaded = trafilatura.fetch_url(product_url)
+                if downloaded:
+                    page_content = trafilatura.extract(downloaded, include_comments=False, include_tables=True, output_format='json')
+                    if page_content:
+                        # Convert JSON string to dict and extract info
+                        extracted_data = json.loads(page_content)
+                        return {
+                            "data": {
+                                "item": {
+                                    "itemid": int(item_id),
+                                    "shopid": int(shop_id),
+                                    "name": extracted_data.get("title", ""),
+                                    "description": extracted_data.get("text", ""),
+                                    "item_status": "normal",
+                                    "price": 0,  # Will try to extract this later
+                                    "stock": 0,  # Will try to extract this later
+                                    "historical_sold": 0,  # Will try to extract this later
+                                    "shopee_verified": True,
+                                    "is_official_shop": False,
+                                    "brand": "Unknown",
+                                    "images": []  # Will try to extract these later
+                                }
+                            },
+                            "scraped_content": extracted_data
+                        }
+            except Exception as trafilatura_error:
+                logger.warning(f"Trafilatura extraction failed for {shop_id}.{item_id}: {str(trafilatura_error)}")
+                # Fall back to BeautifulSoup if trafilatura fails
+            
+            # Fallback to direct request + BeautifulSoup if trafilatura failed
+            logger.info(f"Falling back to BeautifulSoup for {shop_id}.{item_id}")
+            response = session.get(product_url, headers=headers, timeout=REQUEST_TIMEOUT)
             response.raise_for_status()
             
-            # Check if response is successful and has proper JSON content
+            # If we get a successful response, parse the HTML with BeautifulSoup
             if response.status_code == 200:
-                try:
-                    data = response.json()
-                    # Validate data has expected structure
-                    if data and isinstance(data, dict) and 'data' in data:
-                        return data
-                    else:
-                        logger.warning(f"Invalid response structure for product {shop_id}.{item_id}")
-                        return {"error": "Invalid response structure", "raw_response": str(response.text)[:1000]}
-                except json.JSONDecodeError as e:
-                    logger.error(f"JSON decode error for {shop_id}.{item_id}: {str(e)}")
-                    return {"error": "Invalid JSON response", "raw_response": str(response.text)[:1000]}
+                soup = BeautifulSoup(response.text, 'html.parser')
+                
+                # Try to extract product data from the HTML
+                title = ""
+                title_elem = soup.select_one('div.YPqix5 > span')
+                if title_elem:
+                    title = title_elem.text.strip()
+                
+                # Extract product description from meta tags if available
+                description = ""
+                meta_desc = soup.select_one('meta[name="description"]')
+                if meta_desc and meta_desc.get('content'):
+                    description = meta_desc.get('content')
+                
+                # Structure the data to match the API response format as much as possible
+                product_data = {
+                    "data": {
+                        "item": {
+                            "itemid": int(item_id),
+                            "shopid": int(shop_id),
+                            "name": title,
+                            "description": description,
+                            "item_status": "normal",
+                            "price": 0,  # We can't easily extract this from HTML
+                            "stock": 0,  # We can't easily extract this from HTML
+                            "historical_sold": 0,  # We can't easily extract this from HTML
+                            "shopee_verified": True,
+                            "is_official_shop": False,
+                            "brand": "Unknown",
+                            "images": []  # We can't easily extract these from HTML
+                        }
+                    },
+                    "scraped_html": str(soup)[:5000]  # Include a portion of HTML for debugging
+                }
+                
+                logger.info(f"Successfully extracted basic product data for {shop_id}.{item_id}")
+                return product_data
             
             return {"error": f"Unexpected status code: {response.status_code}"}
                 
