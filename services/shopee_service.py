@@ -201,18 +201,115 @@ class ShopeeService:
             # If we get a successful response, parse the HTML with BeautifulSoup
             if response.status_code == 200:
                 soup = BeautifulSoup(response.text, 'html.parser')
+                logger.info(f"Successfully downloaded HTML for {shop_id}.{item_id}")
                 
-                # Try to extract product data from the HTML
+                # Try to extract product data from the HTML using multiple methods
                 title = ""
-                title_elem = soup.select_one('div.YPqix5 > span')
-                if title_elem:
-                    title = title_elem.text.strip()
+                # Try different selectors for the title
+                selectors = [
+                    'div.YPqix5 > span',
+                    'div.AttM6y > span',
+                    'div[class*="product-title"] span',
+                    'h1',
+                    'meta[property="og:title"]',
+                    'title'
+                ]
+                
+                for selector in selectors:
+                    try:
+                        elem = soup.select_one(selector)
+                        if elem:
+                            if selector.startswith('meta'):
+                                title = elem.get('content', '').strip()
+                            else:
+                                title = elem.text.strip()
+                            if title:
+                                logger.info(f"Found title using selector {selector}: {title[:30]}...")
+                                break
+                    except Exception as e:
+                        logger.warning(f"Error extracting title with selector {selector}: {str(e)}")
+                
+                # If no title found, use product ID as fallback
+                if not title:
+                    title = f"Product {item_id}"
+                    logger.warning(f"Could not extract title for {shop_id}.{item_id}, using fallback")
                 
                 # Extract product description from meta tags if available
                 description = ""
-                meta_desc = soup.select_one('meta[name="description"]')
-                if meta_desc and meta_desc.get('content'):
-                    description = meta_desc.get('content')
+                try:
+                    desc_selectors = [
+                        'meta[name="description"]',
+                        'meta[property="og:description"]',
+                        'div[class*="product-desc"]',
+                        'div[class*="description"]'
+                    ]
+                    
+                    for selector in desc_selectors:
+                        elem = soup.select_one(selector)
+                        if elem:
+                            if selector.startswith('meta'):
+                                description = elem.get('content', '').strip()
+                            else:
+                                description = elem.text.strip()
+                            if description:
+                                logger.info(f"Found description using selector {selector}: {description[:30]}...")
+                                break
+                except Exception as e:
+                    logger.warning(f"Error extracting description: {str(e)}")
+                
+                # Try to extract price
+                price = 0
+                try:
+                    price_selectors = [
+                        'div[class*="price"] span',
+                        'meta[property="product:price:amount"]'
+                    ]
+                    
+                    for selector in price_selectors:
+                        elem = soup.select_one(selector)
+                        if elem:
+                            if selector.startswith('meta'):
+                                price_text = elem.get('content', '').strip()
+                            else:
+                                price_text = elem.text.strip()
+                            
+                            if price_text:
+                                # Remove currency symbols and convert to number
+                                price_text = ''.join(c for c in price_text if c.isdigit() or c == '.')
+                                try:
+                                    price = float(price_text)
+                                    logger.info(f"Found price: {price}")
+                                    break
+                                except ValueError:
+                                    continue
+                except Exception as e:
+                    logger.warning(f"Error extracting price: {str(e)}")
+                
+                # Look for images
+                images = []
+                try:
+                    # Try to find image URLs in various places
+                    img_selectors = [
+                        'meta[property="og:image"]',
+                        'img[class*="product-image"]',
+                        'img[class*="main-image"]'
+                    ]
+                    
+                    for selector in img_selectors:
+                        elems = soup.select(selector)
+                        if elems:
+                            for elem in elems:
+                                if selector.startswith('meta'):
+                                    img_url = elem.get('content', '')
+                                else:
+                                    img_url = elem.get('src', '')
+                                if img_url and img_url not in images and img_url.startswith('http'):
+                                    images.append(img_url)
+                            if images:
+                                logger.info(f"Found {len(images)} images using selector {selector}")
+                                break
+                except Exception as e:
+                    logger.warning(f"Error extracting images: {str(e)}")
                 
                 # Structure the data to match the API response format as much as possible
                 product_data = {
@@ -223,19 +320,19 @@ class ShopeeService:
                             "name": title,
                             "description": description,
                             "item_status": "normal",
-                            "price": 0,  # We can't easily extract this from HTML
-                            "stock": 0,  # We can't easily extract this from HTML
-                            "historical_sold": 0,  # We can't easily extract this from HTML
+                            "price": price,
+                            "stock": 100,  # Default stock
+                            "historical_sold": 0,  # Default historical sold
                             "shopee_verified": True,
                             "is_official_shop": False,
                             "brand": "Unknown",
-                            "images": []  # We can't easily extract these from HTML
+                            "images": images
                         }
                     },
-                    "scraped_html": str(soup)[:5000]  # Include a portion of HTML for debugging
+                    "scraped_html": str(soup.title)  # Just include title tag instead of entire HTML
                 }
                 
-                logger.info(f"Successfully extracted basic product data for {shop_id}.{item_id}")
+                logger.info(f"Successfully extracted product data for {shop_id}.{item_id}")
                 return product_data
             
             return {"error": f"Unexpected status code: {response.status_code}"}
