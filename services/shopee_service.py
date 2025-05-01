@@ -259,55 +259,103 @@ class ShopeeService:
                 
                 # Try to extract price
                 price = 0
+                script_images = []
                 try:
-                    price_selectors = [
-                        'div[class*="price"] span',
-                        'meta[property="product:price:amount"]'
-                    ]
-                    
-                    for selector in price_selectors:
-                        elem = soup.select_one(selector)
-                        if elem:
-                            if selector.startswith('meta'):
-                                price_text = elem.get('content', '').strip()
-                            else:
-                                price_text = elem.text.strip()
-                            
-                            if price_text:
-                                # Remove currency symbols and convert to number
-                                price_text = ''.join(c for c in price_text if c.isdigit() or c == '.')
+                    # Try to find the script tag with product data
+                    scripts = soup.find_all('script')
+                    for script in scripts:
+                        script_content = script.string if script.string else ''
+                        if script_content and ('__INITIAL_STATE__' in script_content or 'window._shopee' in script_content):
+                            # Found a script with product data
+                            logger.info("Found product data in script tag")
+                            # Look for price in the script
+                            import re
+                            # Try to find price pattern
+                            price_match = re.search(r'"price":\s*(\d+\.?\d*)', script_content)
+                            if price_match:
                                 try:
-                                    price = float(price_text)
-                                    logger.info(f"Found price: {price}")
-                                    break
+                                    price = float(price_match.group(1))
+                                    logger.info(f"Found price in script: {price}")
                                 except ValueError:
-                                    continue
+                                    pass
+                            
+                            # Try to find product name
+                            if not title:
+                                name_match = re.search(r'"name":\s*"([^"]+)"', script_content)
+                                if name_match:
+                                    title = name_match.group(1)
+                                    logger.info(f"Found title in script: {title[:30]}...")
+                            
+                            # Try to find description
+                            if not description:
+                                desc_match = re.search(r'"description":\s*"([^"]+)"', script_content)
+                                if desc_match:
+                                    description = desc_match.group(1).replace('\\n', '\n')
+                                    logger.info(f"Found description in script: {description[:30]}...")
+                            
+                            # Try to find images
+                            img_matches = re.findall(r'"image":\s*"(https:[^"]+)"', script_content)
+                            if img_matches:
+                                # Store the images for later use
+                                script_images = img_matches
+                                logger.info(f"Found {len(script_images)} images in script")
+                            break
+                    
+                    # If we didn't find price in scripts, try selectors as backup
+                    if price == 0:
+                        price_selectors = [
+                            'div[class*="price"] span',
+                            'meta[property="product:price:amount"]'
+                        ]
+                        
+                        for selector in price_selectors:
+                            elem = soup.select_one(selector)
+                            if elem:
+                                if selector.startswith('meta'):
+                                    price_text = elem.get('content', '').strip()
+                                else:
+                                    price_text = elem.text.strip()
+                                
+                                if price_text:
+                                    # Remove currency symbols and convert to number
+                                    price_text = ''.join(c for c in price_text if c.isdigit() or c == '.')
+                                    try:
+                                        price = float(price_text)
+                                        logger.info(f"Found price using selector {selector}: {price}")
+                                        break
+                                    except ValueError:
+                                        continue
                 except Exception as e:
                     logger.warning(f"Error extracting price: {str(e)}")
                 
                 # Look for images
                 images = []
                 try:
-                    # Try to find image URLs in various places
-                    img_selectors = [
-                        'meta[property="og:image"]',
-                        'img[class*="product-image"]',
-                        'img[class*="main-image"]'
-                    ]
-                    
-                    for selector in img_selectors:
-                        elems = soup.select(selector)
-                        if elems:
-                            for elem in elems:
-                                if selector.startswith('meta'):
-                                    img_url = elem.get('content', '')
-                                else:
-                                    img_url = elem.get('src', '')
-                                if img_url and img_url not in images and img_url.startswith('http'):
-                                    images.append(img_url)
-                            if images:
-                                logger.info(f"Found {len(images)} images using selector {selector}")
-                                break
+                    # First check if we already found images in scripts
+                    if 'script_images' in locals() and script_images:
+                        images.extend(script_images)
+                        logger.info(f"Using {len(images)} images from script data")
+                    else:
+                        # Try to find image URLs in various places
+                        img_selectors = [
+                            'meta[property="og:image"]',
+                            'img[class*="product-image"]',
+                            'img[class*="main-image"]'
+                        ]
+                        
+                        for selector in img_selectors:
+                            elems = soup.select(selector)
+                            if elems:
+                                for elem in elems:
+                                    if selector.startswith('meta'):
+                                        img_url = elem.get('content', '')
+                                    else:
+                                        img_url = elem.get('src', '')
+                                    if img_url and img_url not in images and img_url.startswith('http'):
+                                        images.append(img_url)
+                                if images:
+                                    logger.info(f"Found {len(images)} images using selector {selector}")
+                                    break
                 except Exception as e:
                     logger.warning(f"Error extracting images: {str(e)}")
                 
