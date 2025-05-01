@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Shopee Product Data API</title>
+    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">Shopee Product Data API</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav me-auto">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="/dashboard">Dashboard</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link" href="/docs">API Documentation</a>
+                    </li>
+                </ul>
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/logout">Logout</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <div class="row">
+            <div class="col-md-12">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h1>Dashboard</h1>
+                    <div>
+                        <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#apiKeyModal">
+                            <i class="bi bi-key me-2"></i>View API Key
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row mb-4">
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Total Jobs</h5>
+                        <h1 class="display-4">{{ total_jobs }}</h1>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Products Retrieved</h5>
+                        <h1 class="display-4">{{ total_products }}</h1>
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card">
+                    <div class="card-body">
+                        <h5 class="card-title">Success Rate</h5>
+                        <h1 class="display-4">{{ success_rate }}%</h1>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <div class="col-md-12">
+                <div class="card">
+                    <div class="card-header">
+                        <h5 class="mb-0">Recent Jobs</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="table-responsive">
+                            <table class="table table-hover">
+                                <thead>
+                                    <tr>
+                                        <th>Job ID</th>
+                                        <th>Status</th>
+                                        <th>Products</th>
+                                        <th>Created</th>
+                                        <th>Completed</th>
+                                        <th>Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for job in jobs %}
+                                    <tr>
+                                        <td>{{ job.vendor_job_id }}</td>
+                                        <td>
+                                            {% if job.status == 'success' %}
+                                            <span class="badge bg-success">Success</span>
+                                            {% elif job.status == 'processing' %}
+                                            <span class="badge bg-warning">Processing</span>
+                                            {% elif job.status == 'failure' %}
+                                            <span class="badge bg-danger">Failed</span>
+                                            {% else %}
+                                            <span class="badge bg-info">{{ job.status }}</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>{{ job.product_count }}</td>
+                                        <td>{{ job.created_at }}</td>
+                                        <td>{{ job.completed_at or '-' }}</td>
+                                        <td>
+                                            <a href="/job/{{ job.id }}" class="btn btn-sm btn-outline-primary">View</a>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                        {% if not jobs %}
+                        <div class="text-center py-4">
+                            <p class="text-muted mb-0">No jobs found</p>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- API Key Modal -->
+    <div class="modal fade" id="apiKeyModal" tabindex="-1" aria-labelledby="apiKeyModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="apiKeyModalLabel">Your API Key</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-warning" role="alert">
+                        Keep your API key secure! Do not share it with anyone else.
+                    </div>
+                    <div class="input-group mb-3">
+                        <input type="text" class="form-control" id="apiKeyInput" value="{{ api_key }}" readonly>
+                        <button class="btn btn-outline-secondary" type="button" id="copyButton" onclick="copyApiKey()">
+                            <i class="bi bi-clipboard"></i> Copy
+                        </button>
+                    </div>
+                    <p class="text-muted small">
+                        Use this API key in your requests with the following header:
+                        <code>Authorization: Bearer {{ api_key }}</code>
+                    </p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer mt-5 py-3 bg-dark">
+        <div class="container text-center">
+            <span class="text-muted">© 2023 Shopee Product Data API. All rights reserved.</span>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function copyApiKey() {
+            var apiKeyInput = document.getElementById('apiKeyInput');
+            apiKeyInput.select();
+            apiKeyInput.setSelectionRange(0, 99999);
+            document.execCommand('copy');
+            
+            var copyButton = document.getElementById('copyButton');
+            copyButton.innerHTML = '<i class="bi bi-check"></i> Copied!';
+            setTimeout(function() {
+                copyButton.innerHTML = '<i class="bi bi-clipboard"></i> Copy';
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

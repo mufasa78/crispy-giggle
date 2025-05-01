@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Documentation - Shopee Product Data API</title>
+    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
+    <style>
+        pre {
+            background-color: var(--bs-dark);
+            border-radius: 5px;
+            padding: 15px;
+            overflow-x: auto;
+        }
+        code {
+            color: var(--bs-info);
+        }
+        .endpoint {
+            border-left: 4px solid var(--bs-primary);
+            padding-left: 15px;
+            margin-bottom: 30px;
+        }
+        .method-badge {
+            display: inline-block;
+            width: 60px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+        <div class="container">
+            <a class="navbar-brand" href="/">Shopee Product Data API</a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <ul class="navbar-nav">
+                    <li class="nav-item">
+                        <a class="nav-link" href="/">Home</a>
+                    </li>
+                    <li class="nav-item">
+                        <a class="nav-link active" aria-current="page" href="/docs">API Documentation</a>
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-5">
+        <h1 class="mb-4">API Documentation</h1>
+        
+        <div class="row">
+            <div class="col-md-3">
+                <div class="sticky-top pt-3">
+                    <div class="card">
+                        <div class="card-header">Contents</div>
+                        <div class="card-body">
+                            <ul class="nav flex-column">
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#authentication">Authentication</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#create-job">Create Job</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#get-job">Get Job Results</a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link" href="#error-handling">Error Handling</a>
+                                </li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="col-md-9">
+                <div class="card mb-4">
+                    <div class="card-body">
+                        <h2>Introduction</h2>
+                        <p>This API provides access to product data from Shopee Taiwan. It allows you to create asynchronous jobs to fetch data for multiple product IDs and retrieve the results when processing is complete.</p>
+                        <p>The base URL for all endpoints is: <code>/api/v1</code></p>
+                    </div>
+                </div>
+                
+                <div class="card mb-4" id="authentication">
+                    <div class="card-body">
+                        <h2>Authentication</h2>
+                        <p>All API requests require authentication using an API key. Include your API key in the Authorization header of each request:</p>
+                        <pre><code>Authorization: Bearer YOUR_API_KEY</code></pre>
+                        <p>If you don't have an API key, please contact the administrator to obtain one.</p>
+                    </div>
+                </div>
+                
+                <div class="card mb-4" id="create-job">
+                    <div class="card-body">
+                        <h2>Create Job</h2>
+                        <div class="endpoint">
+                            <h4><span class="method-badge badge bg-success">POST</span> /api/v1/job/create</h4>
+                            <p>Creates a new asynchronous job to fetch data for multiple product IDs.</p>
+                            
+                            <h5>Request Headers:</h5>
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Header</th>
+                                        <th>Required</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Content-Type</td>
+                                        <td>Yes</td>
+                                        <td><code>application/json</code></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Authorization</td>
+                                        <td>Yes</td>
+                                        <td><code>Bearer YOUR_API_KEY</code></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <h5>Request Body:</h5>
+                            <pre><code>{
+  "job_id": "34c4e7623450",  // Optional
+  "deals": [
+    {
+      "deal_id": "1988776.7648272833",
+      "step_id": "123546",
+      "priority": 2
+    },
+    {
+      "deal_id": "1877554.6761418533",
+      "step_id": "123893",
+      "priority": 1
+    }
+  ]
+}</code></pre>
+                            
+                            <h5>Parameters:</h5>
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter</th>
+                                        <th>Type</th>
+                                        <th>Required</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>job_id</td>
+                                        <td>string</td>
+                                        <td>No</td>
+                                        <td>A custom job ID from your side. If not provided, a UUID will be generated.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>deals</td>
+                                        <td>array</td>
+                                        <td>Yes</td>
+                                        <td>An array of deal objects to process.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>deals[].deal_id</td>
+                                        <td>string</td>
+                                        <td>Yes</td>
+                                        <td>The product deal ID in the format "{shop_id}.{item_id}".</td>
+                                    </tr>
+                                    <tr>
+                                        <td>deals[].step_id</td>
+                                        <td>string</td>
+                                        <td>Yes</td>
+                                        <td>The step ID for this deal.</td>
+                                    </tr>
+                                    <tr>
+                                        <td>deals[].priority</td>
+                                        <td>integer</td>
+                                        <td>Yes</td>
+                                        <td>The priority for processing this deal (lower values = higher priority).</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <h5>Response (200 OK):</h5>
+                            <pre><code>{
+  "success": true,
+  "code": null,
+  "message": null,
+  "data": {
+    "vendor_job_id": "1234abcd"
+  }
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mb-4" id="get-job">
+                    <div class="card-body">
+                        <h2>Get Job Results</h2>
+                        <div class="endpoint">
+                            <h4><span class="method-badge badge bg-primary">GET</span> /api/v1/job/result/{vendor_job_id}</h4>
+                            <p>Retrieves the results of a previously created job.</p>
+                            
+                            <h5>Request Headers:</h5>
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Header</th>
+                                        <th>Required</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>Authorization</td>
+                                        <td>Yes</td>
+                                        <td><code>Bearer YOUR_API_KEY</code></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <h5>URL Parameters:</h5>
+                            <table class="table table-bordered">
+                                <thead>
+                                    <tr>
+                                        <th>Parameter</th>
+                                        <th>Type</th>
+                                        <th>Required</th>
+                                        <th>Description</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>vendor_job_id</td>
+                                        <td>string</td>
+                                        <td>Yes</td>
+                                        <td>The vendor job ID returned from the create job endpoint.</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                            
+                            <h5>Response (200 OK):</h5>
+                            <pre><code>{
+  "success": true,
+  "code": null,
+  "message": null,
+  "data": {
+    "vendor_job_id": "1234abcd",
+    "status": "success",
+    "deals": [
+      {
+        "deal_id": "1988776.7648272833",
+        "step_id": "123546",
+        "priority": 2,
+        "status": 2,  // 1-processing, 2-success, 3-failure
+        "data": {
+          // Raw product JSON data from Shopee
+          "code": null,
+          "data": {
+            "item": {
+              "item_id": 7648272833,
+              "shop_id": 1988776,
+              // ... more product data
+            }
+          },
+          // ... more data
+        }
+      },
+      // ... more deals
+    ]
+  }
+}</code></pre>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="card mb-4" id="error-handling">
+                    <div class="card-body">
+                        <h2>Error Handling</h2>
+                        <p>All API errors follow a consistent format:</p>
+                        <pre><code>{
+  "success": false,
+  "code": "error_code",
+  "message": "Human-readable error message"
+}</code></pre>
+                        
+                        <h5>Common Error Codes:</h5>
+                        <table class="table table-bordered">
+                            <thead>
+                                <tr>
+                                    <th>Code</th>
+                                    <th>HTTP Status</th>
+                                    <th>Description</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td>unauthorized</td>
+                                    <td>401</td>
+                                    <td>Invalid or missing API key.</td>
+                                </tr>
+                                <tr>
+                                    <td>invalid_request</td>
+                                    <td>400</td>
+                                    <td>The request body is invalid or missing required fields.</td>
+                                </tr>
+                                <tr>
+                                    <td>job_not_found</td>
+                                    <td>404</td>
+                                    <td>The requested job was not found.</td>
+                                </tr>
+                                <tr>
+                                    <td>job_already_exists</td>
+                                    <td>409</td>
+                                    <td>A job with the provided job_id already exists.</td>
+                                </tr>
+                                <tr>
+                                    <td>server_error</td>
+                                    <td>500</td>
+                                    <td>An unexpected server error occurred.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <footer class="footer mt-5 py-3 bg-dark">
+        <div class="container text-center">
+            <span class="text-muted">© 2023 Shopee Product Data API. All rights reserved.</span>
+        </div>
+    </footer>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
