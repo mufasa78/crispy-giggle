@@ -6,6 +6,21 @@ from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_jwt_extended import JWTManager
 
+# Import App Engine configuration functions
+try:
+    from appengine_config import get_database_url, get_session_secret
+except ImportError:
+    # Fallback for local development if file doesn't exist
+    def get_database_url():
+        return os.environ.get("DATABASE_URL", "postgresql://shopeescraper_owner:npg_zAhujem75qoK@ep-lucky-math-a4xqp14y-pooler.us-east-1.aws.neon.tech/shopeescraper?sslmode=require")
+    
+    def get_session_secret():
+        return os.environ.get("SESSION_SECRET", "default-secret-key")
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Create base class for SQLAlchemy models
 class Base(DeclarativeBase):
     pass
@@ -15,19 +30,22 @@ db = SQLAlchemy(model_class=Base)
 
 # Create the Flask app
 app = Flask(__name__)
-app.secret_key = os.environ.get("SESSION_SECRET", "default-secret-key")
+app.secret_key = get_session_secret()
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Configure the database
-app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://shopeescraper_owner:npg_zAhujem75qoK@ep-lucky-math-a4xqp14y-pooler.us-east-1.aws.neon.tech/shopeescraper?sslmode=require"
+database_url = get_database_url()
+app.config["SQLALCHEMY_DATABASE_URI"] = database_url
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
+    "pool_size": 10,
+    "max_overflow": 20,
 }
 
 # Configure JWT
-app.config["JWT_SECRET_KEY"] = os.environ.get("SESSION_SECRET", "default-secret-key")
+app.config["JWT_SECRET_KEY"] = get_session_secret()  # Use the same secret for simplicity
 app.config["JWT_ACCESS_TOKEN_EXPIRES"] = 86400  # 24 hours
 
 # Initialize extensions
