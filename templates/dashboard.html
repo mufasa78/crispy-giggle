@@ -115,8 +115,8 @@
                                             {% endif %}
                                         </td>
                                         <td>{{ job.product_count }}</td>
-                                        <td>{{ job.created_at }}</td>
-                                        <td>{{ job.completed_at or '-' }}</td>
+                                        <td>{{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') if job.created_at else '-' }}</td>
+                                        <td>{{ job.completed_at.strftime('%Y-%m-%d %H:%M:%S') if job.completed_at else '-' }}</td>
                                         <td>
                                             <a href="/job/{{ job.id }}" class="btn btn-sm btn-outline-primary">View</a>
                                         </td>

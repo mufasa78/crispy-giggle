@@ -110,11 +110,11 @@
                                     </tr>
                                     <tr>
                                         <th>Created:</th>
-                                        <td>{{ job.created_at }}</td>
+                                        <td>{{ job.created_at.strftime('%Y-%m-%d %H:%M:%S') if job.created_at else '-' }}</td>
                                     </tr>
                                     <tr>
                                         <th>Completed:</th>
-                                        <td>{{ job.completed_at or 'Not completed yet' }}</td>
+                                        <td>{{ job.completed_at.strftime('%Y-%m-%d %H:%M:%S') if job.completed_at else 'Not completed yet' }}</td>
                                     </tr>
                                 </table>
                             </div>
