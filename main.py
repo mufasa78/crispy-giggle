@@ -92,6 +92,204 @@ def dashboard():
         api_key=user.api_key
     )
 
+@app.route('/import', methods=['GET', 'POST'])
+@login_required
+def import_data():
+    # Get current user
+    user_id = session.get('user_id')
+    user = User.query.get(user_id)
+    
+    if not user:
+        session.clear()
+        return redirect(url_for('login'))
+    
+    if request.method == 'POST':
+        # Check if file was uploaded
+        if 'csv_file' not in request.files:
+            return render_template('import.html', error='No file uploaded')
+        
+        file = request.files['csv_file']
+        
+        # Check if file is empty
+        if file.filename == '':
+            return render_template('import.html', error='No file selected')
+        
+        # Check if file is CSV
+        if not file.filename.endswith('.csv'):
+            return render_template('import.html', error='File must be a CSV')
+        
+        try:
+            # Read CSV file
+            csv_data = file.read().decode('latin-1')
+            lines = csv_data.splitlines()
+            
+            # Skip header
+            if len(lines) > 0:
+                lines = lines[1:]
+            
+            # Check if there are any product URLs
+            if len(lines) == 0:
+                return render_template('import.html', error='No product URLs found in the CSV')
+            
+            # Extract product URLs
+            product_urls = []
+            for line in lines:
+                parts = line.split(',')
+                if len(parts) >= 2:
+                    product_urls.append(parts[1].strip())
+            
+            # Check if there are any valid URLs
+            if len(product_urls) == 0:
+                return render_template('import.html', error='No valid product URLs found in the CSV')
+            
+            # Process products and create job
+            from services.shopee_service import ShopeeService
+            from utils.helpers import generate_vendor_job_id
+            
+            # Generate job ID
+            job_name = request.form.get('job_name', '')
+            vendor_job_id = f"{job_name}-{generate_vendor_job_id()}" if job_name else generate_vendor_job_id()
+            
+            # Create new job
+            new_job = Job(
+                vendor_job_id=vendor_job_id,
+                user_id=user.id,
+                status='processing'
+            )
+            db.session.add(new_job)
+            db.session.flush()  # Flush to get the job ID
+            
+            # Process each URL and create deals
+            valid_urls = 0
+            for priority, url in enumerate(product_urls):
+                try:
+                    # Extract shop_id and item_id from URL
+                    shop_id, item_id = ShopeeService.extract_ids_from_url(url)
+                    
+                    # Create deal
+                    deal_id = f"{shop_id}.{item_id}"
+                    step_id = str(priority)  # Use priority as step_id
+                    
+                    new_deal = Deal(
+                        job_id=new_job.id,
+                        deal_id=deal_id,
+                        step_id=step_id,
+                        priority=priority
+                    )
+                    db.session.add(new_deal)
+                    valid_urls += 1
+                    
+                except Exception as e:
+                    logger.error(f"Error processing URL {url}: {str(e)}")
+                    continue
+            
+            if valid_urls == 0:
+                db.session.rollback()
+                return render_template('import.html', error='No valid Shopee URLs found in the file')
+            
+            # Create billing record
+            billing_record = BillingRecord(
+                user_id=user.id,
+                job_id=new_job.id,
+                product_count=valid_urls
+            )
+            db.session.add(billing_record)
+            
+            db.session.commit()
+            
+            # Process job asynchronously
+            from services.job_service import process_job
+            process_job(new_job.id)
+            
+            return render_template(
+                'import.html', 
+                success=f'Job created with ID: {vendor_job_id}. Processing {valid_urls} products.'
+            )
+            
+        except Exception as e:
+            logger.error(f"Error importing CSV: {str(e)}")
+            return render_template('import.html', error=f'Error processing file: {str(e)}')
+    
+    return render_template('import.html')
+
+@app.route('/job/<int:job_id>')
+@login_required
+def job_detail(job_id):
+    # Get current user
+    user_id = session.get('user_id')
+    user = User.query.get(user_id)
+    
+    if not user:
+        session.clear()
+        return redirect(url_for('login'))
+    
+    # Get job
+    job = Job.query.get_or_404(job_id)
+    
+    # Check if user owns the job
+    if job.user_id != user.id:
+        flash('You do not have permission to view this job')
+        return redirect(url_for('dashboard'))
+    
+    # Get all deals for the job
+    deals = Deal.query.filter_by(job_id=job.id).order_by(Deal.priority).all()
+    
+    # Calculate statistics
+    success_count = Deal.query.filter_by(job_id=job.id, status=2).count()  # status 2 = success
+    failure_count = Deal.query.filter_by(job_id=job.id, status=3).count()  # status 3 = failure
+    
+    # Get job result in JSON format
+    from services.job_service import get_job_result
+    job_result = get_job_result(job.id)
+    
+    return render_template(
+        'job_detail.html',
+        job=job,
+        deals=deals,
+        success_count=success_count,
+        failure_count=failure_count,
+        job_result=job_result
+    )
+
+@app.route('/job/<int:job_id>/export')
+@login_required
+def job_export(job_id):
+    # Get current user
+    user_id = session.get('user_id')
+    user = User.query.get(user_id)
+    
+    if not user:
+        session.clear()
+        return redirect(url_for('login'))
+    
+    # Get job
+    job = Job.query.get_or_404(job_id)
+    
+    # Check if user owns the job
+    if job.user_id != user.id:
+        flash('You do not have permission to export this job')
+        return redirect(url_for('dashboard'))
+    
+    # Get job result in JSON format
+    from services.job_service import get_job_result
+    job_result = get_job_result(job.id)
+    
+    # Return as downloadable JSON file
+    from flask import Response
+    import json
+    from utils.helpers import JSONEncoder
+    
+    filename = f"shopee_data_{job.vendor_job_id}.json"
+    json_data = json.dumps(job_result, cls=JSONEncoder, indent=2)
+    
+    response = Response(
+        json_data,
+        mimetype='application/json',
+        headers={'Content-Disposition': f'attachment; filename={filename}'}
+    )
+    
+    return response
+
 @app.route('/setup-admin', methods=['GET', 'POST'])
 def setup_admin():
     # Check if any users exist
