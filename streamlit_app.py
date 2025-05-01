@@ -72,19 +72,51 @@ def cancel_job(api_key, job_id):
     )
     return response.json()
 
+# Authentication and session management
+def check_password():
+    """Returns `True` if the user had the correct password."""
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        if st.session_state["password"] == st.secrets.get("PASSWORD", "admin"):
+            st.session_state["password_correct"] = True
+            # Delete the password from session state to not show it in the UI
+            del st.session_state["password"]
+        else:
+            st.session_state["password_correct"] = False
+
+    # Return True if the password is validated
+    if st.session_state.get("password_correct", False):
+        return True
+
+    # Show input for password
+    st.title("Shopee Data API")
+    st.markdown("Please enter your password to access the application.")
+    st.text_input(
+        "Password", type="password", on_change=password_entered, key="password"
+    )
+    if "password_correct" in st.session_state:
+        if not st.session_state["password_correct"]:
+            st.error("😕 Password incorrect. Please try again.")
+    return False
+
 # Sidebar for API key input
-with st.sidebar:
-    st.title("🛍️ Shopee Data API")
-    api_key = st.text_input("API Key", type="password")
-    st.divider()
-    
-    # Navigation
-    page = st.radio("Navigation", ["Extract Data", "Check Results", "Documentation"])
-    
-    st.divider()
-    st.markdown("### About")
-    st.markdown("This app allows you to extract product data from Shopee Taiwan using the API.")
-    st.markdown("Made with ❤️ by Your Company")
+if check_password():
+    with st.sidebar:
+        st.title("🛍️ Shopee Data API")
+        api_key = st.text_input("API Key", type="password")
+        st.divider()
+        
+        # Navigation
+        page = st.radio("Navigation", ["Extract Data", "Check Results", "Documentation"])
+        
+        st.divider()
+        st.markdown("### About")
+        st.markdown("This app allows you to extract product data from Shopee Taiwan using the API.")
+        st.markdown("Made with ❤️ by Your Company")
+        
+        if st.button("Logout"):
+            st.session_state["password_correct"] = False
+            st.experimental_rerun()
 
 # Main content
 if page == "Extract Data":
@@ -188,13 +220,50 @@ if page == "Extract Data":
         uploaded_file = st.file_uploader("Choose a CSV file", type="csv")
         
         if uploaded_file is not None:
+            # Add encoding options
+            encoding_option = st.selectbox(
+                "CSV Encoding", 
+                ["utf-8", "latin-1", "iso-8859-1", "cp1252", "gbk", "big5"], 
+                index=0,
+                help="If you encounter encoding errors, try different encoding options")
+                
             try:
-                df = pd.read_csv(uploaded_file)
+                # Try reading with selected encoding
+                try:
+                    df = pd.read_csv(uploaded_file, encoding=encoding_option)
+                except UnicodeDecodeError:
+                    # If the selected encoding fails, try with latin-1 which rarely fails
+                    st.warning(f"Encoding {encoding_option} failed. Trying with latin-1 encoding instead.")
+                    # Reset file pointer to the beginning
+                    uploaded_file.seek(0)
+                    df = pd.read_csv(uploaded_file, encoding="latin-1")
+                
                 if len(df.columns) == 0:
                     st.error("The CSV file is empty.")
                 else:
-                    # Extract URLs from the first column
-                    urls = df.iloc[:, 0].tolist()
+                    # Show preview of the data
+                    with st.expander("Preview CSV data"):
+                        st.dataframe(df.head())
+                    
+                    # Detect the column containing URLs
+                    url_column = 0  # Default to first column
+                    
+                    # Try to find a column that might contain URLs
+                    for i, col in enumerate(df.columns):
+                        if "url" in col.lower() or "link" in col.lower() or "shopee" in col.lower():
+                            url_column = i
+                            break
+                    
+                    # Allow user to select which column contains the URLs
+                    url_column = st.selectbox(
+                        "Select column containing Shopee URLs", 
+                        options=list(range(len(df.columns))),
+                        format_func=lambda x: f"{df.columns[x]} (Column {x+1})",
+                        index=url_column
+                    )
+                    
+                    # Extract URLs from the selected column
+                    urls = df.iloc[:, url_column].tolist()
                     valid_urls = []
                     invalid_urls = []
                     
@@ -214,10 +283,18 @@ if page == "Extract Data":
                     
                     if invalid_urls:
                         with st.expander("Show invalid URLs"):
-                            for url in invalid_urls:
-                                st.write(url)
+                            for i, url in enumerate(invalid_urls):
+                                st.write(f"{i+1}. {url}")
                     
                     if valid_urls:
+                        # Display sample of valid URLs
+                        with st.expander("Preview valid Shopee URLs"):
+                            for i, url_data in enumerate(valid_urls[:5]):
+                                st.write(f"{i+1}. {url_data['url']}")
+                                st.write(f"   Shop ID: {url_data['shop_id']}, Item ID: {url_data['item_id']}")
+                            if len(valid_urls) > 5:
+                                st.write(f"...and {len(valid_urls) - 5} more URLs")
+                        
                         if st.button("Extract Data from All Valid URLs"):
                             if not api_key:
                                 st.error("Please enter your API key in the sidebar.")
@@ -244,6 +321,22 @@ if page == "Extract Data":
                                         st.error(f"Error creating job: {result.get('message', 'Unknown error')}")
             except Exception as e:
                 st.error(f"Error reading CSV file: {str(e)}")
+                st.info("Tips for troubleshooting:")
+                st.markdown("""  
+                - Try a different encoding option
+                - Ensure the CSV file is properly formatted
+                - Check that the file contains valid Shopee URLs
+                - Remove any special characters from column headers
+                - Save the CSV with UTF-8 encoding in your spreadsheet program
+                """)
+                
+                # Option to download a sample CSV template
+                st.download_button(
+                    label="Download CSV Template",
+                    data="URL\nhttps://shopee.tw/product-name-i.104581011.24901963692\nhttps://shopee.tw/another-product-i.104911467.5684470744",
+                    file_name="shopee_template.csv",
+                    mime="text/csv"
+                )
 
 elif page == "Check Results":
     st.title("Check Job Results")
