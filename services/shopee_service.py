@@ -5,6 +5,7 @@ import time
 import random
 import functools
 import trafilatura
+from datetime import datetime
 from urllib.parse import urlparse, parse_qs
 from requests.adapters import HTTPAdapter
 from urllib3.util import Retry
@@ -15,6 +16,8 @@ from requests_html import HTMLSession
 
 from config import (SHOPEE_BASE_URL, REQUEST_TIMEOUT, RETRY_ATTEMPTS, 
                   RETRY_DELAY, MAX_CONCURRENT_REQUESTS)
+from services.data_enrichment import DataEnrichmentService
+from utils.helpers import format_datetime
 
 # Create a session with connection pooling
 session = requests.Session()
@@ -761,7 +764,10 @@ class ShopeeService:
                                 len(name.strip()) < 3
                             ):
                                 logger.info(f"Successfully fetched data using {method_name} method")
-                                return data
+                                # Enrich the data with our enhanced extraction
+                                enriched_data = DataEnrichmentService.extract_precise_data(data)
+                                logger.info(f"Data enrichment completed for {shop_id}.{item_id}")
+                                return enriched_data
                             else:
                                 errors.append(f"{method_name}: Retrieved name '{name}' appears to be an error message")
                                 logger.warning(f"{method_name} failed: Retrieved name '{name}' appears to be an error message")
@@ -783,7 +789,7 @@ class ShopeeService:
         # with the basic information we know for sure
         logger.warning(f"All methods failed for {shop_id}.{item_id}, using fallback")
         
-        # Create a minimal response with the data we know
+        # Create a more detailed response with the data we know
         fallback_data = {
             "data": {
                 "item": {
@@ -793,12 +799,29 @@ class ShopeeService:
                     "description": "Product information unavailable. Please check the Shopee website for details.",
                     "item_status": "normal",
                     "price": 0,  # Cannot determine price
+                    "price_before_discount": 0,
+                    "currency": "TWD",  # Taiwan currency
                     "stock": 0,  # Cannot determine stock
                     "historical_sold": 0,  # Cannot determine historical sales
+                    "monthly_sales": 0,
+                    "rating": {
+                        "rating_star": 0.0,
+                        "rating_count": 0
+                    },
                     "shopee_verified": True,
                     "is_official_shop": False,
                     "brand": "Unknown",
-                    "images": []
+                    "model": "",
+                    "attributes": [],
+                    "images": [],
+                    "categories": [],
+                    "updated_at": format_datetime(datetime.utcnow()),
+                    "seller": {
+                        "shopid": int(shop_id),
+                        "name": "",
+                        "location": "",
+                        "rating": 0.0
+                    }
                 }
             },
             "errors": errors  # Include all errors for debugging

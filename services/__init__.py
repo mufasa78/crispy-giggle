@@ -10,13 +10,15 @@ try:
     )
     
     from .shopee_service import ShopeeService
+    from .data_enrichment import DataEnrichmentService
     
     __all__ = [
         'start_worker_threads',
         'process_job',
         'cancel_job',
         'get_job_result',
-        'ShopeeService'
+        'ShopeeService',
+        'DataEnrichmentService'
     ]
 except ImportError as e:
     print(f"Warning: Some service modules could not be imported: {e}")

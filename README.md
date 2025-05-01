@@ -14,6 +14,13 @@ This enterprise-level API service extracts detailed product information from Sho
 - **Single URL Processing**: Extract data from any Shopee Taiwan product URL
 - **Admin Dashboard**: Monitor job progress and data extraction statistics
 - **REST API**: Programmatically submit jobs and retrieve results
+- **Enhanced Data Extraction**: Precise product attributes including:
+  - Detailed pricing (current price, original price, discount percentage)
+  - Stock availability and sales data (current stock, historical sold)
+  - Complete product information (brand, model, variants, attributes)
+  - High-quality images with proper URLs
+  - Comprehensive seller details (rating, location, response metrics)
+  - Rating and review statistics
 
 ## API Endpoints
 
@@ -61,13 +68,47 @@ Response example:
             "name": "Product Name",
             "description": "Product description text...",
             "price": 299.0,
+            "price_before_discount": 399.0,
+            "currency": "TWD",
+            "discount_percentage": 25,
             "stock": 100,
             "historical_sold": 500,
+            "monthly_sales": 50,
             "images": [
                 "https://cf.shopee.tw/file/image1.jpg",
                 "https://cf.shopee.tw/file/image2.jpg"
             ],
-            "raw_data": {...}  // Full API response data
+            "brand": "Example Brand",
+            "model": "EX-2023",
+            "attributes": [
+                {"name": "Color", "value": "Red"},
+                {"name": "Size", "value": "XL"},
+                {"name": "Material", "value": "Cotton"}
+            ],
+            "categories": [
+                {"id": 123, "name": "Clothing"}, 
+                {"id": 456, "name": "Shirts"}
+            ],
+            "shipping_options": [
+                {"method": "Standard", "fee": 60.0, "min_days": 3, "max_days": 5}
+            ],
+            "rating": {
+                "rating_star": 4.8,
+                "rating_count": 250,
+                "five_star": 200,
+                "four_star": 35,
+                "three_star": 10,
+                "two_star": 3,
+                "one_star": 2
+            },
+            "seller": {
+                "shopid": 1988776,
+                "name": "Official Shop",
+                "location": "Taipei",
+                "rating": 4.9,
+                "is_official": true
+            },
+            "updated_at": "2025-05-01T20:53:00Z"
         }
     ]
 }
