@@ -6,16 +6,12 @@ from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_jwt_extended import JWTManager
 
-# Import App Engine configuration functions
-try:
-    from appengine_config import get_database_url, get_session_secret
-except ImportError:
-    # Fallback for local development if file doesn't exist
-    def get_database_url():
-        return os.environ.get("DATABASE_URL", "postgresql://shopeescraper_owner:npg_zAhujem75qoK@ep-lucky-math-a4xqp14y-pooler.us-east-1.aws.neon.tech/shopeescraper?sslmode=require")
-    
-    def get_session_secret():
-        return os.environ.get("SESSION_SECRET", "default-secret-key")
+# Helper functions for configuration
+def get_database_url():
+    return os.environ.get("DATABASE_URL", "postgresql://shopeescraper_owner:npg_zAhujem75qoK@ep-lucky-math-a4xqp14y-pooler.us-east-1.aws.neon.tech/shopeescraper?sslmode=require")
+
+def get_session_secret():
+    return os.environ.get("SESSION_SECRET", "default-secret-key")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
