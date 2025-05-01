@@ -2,123 +2,211 @@ import logging
 import threading
 import time
 import concurrent.futures
+import queue
 from datetime import datetime
 
-from app import db
+from app import db, app
 from models import Job, Deal, Product
 from services.shopee_service import ShopeeService
-from config import JOB_BATCH_SIZE, MAX_CONCURRENT_REQUESTS
+from config import JOB_BATCH_SIZE, MAX_CONCURRENT_REQUESTS, WORKER_THREADS, MAX_JOBS_IN_QUEUE
+
+# Create a job queue to manage concurrent jobs
+job_queue = queue.Queue(maxsize=MAX_JOBS_IN_QUEUE)
+
+# Flag to track if worker threads have been started
+workers_started = False
+
+# Initialize worker threads
+worker_threads = []
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
+def start_worker_threads():
+    """
+    Start worker threads to process jobs from the queue
+    """
+    global workers_started, worker_threads
+    
+    if not workers_started:
+        logger.info(f"Starting {WORKER_THREADS} worker threads")
+        for i in range(WORKER_THREADS):
+            thread = threading.Thread(target=_job_worker, name=f"worker-{i}")
+            thread.daemon = True
+            thread.start()
+            worker_threads.append(thread)
+        workers_started = True
+
+def _job_worker():
+    """
+    Worker thread that processes jobs from the queue
+    """
+    thread_name = threading.current_thread().name
+    logger.info(f"Worker thread {thread_name} started")
+    
+    while True:
+        try:
+            # Get a job from the queue
+            job_id = job_queue.get()
+            logger.info(f"Worker {thread_name} processing job {job_id}")
+            
+            # Process the job
+            with app.app_context():
+                _process_job_async(job_id)
+                
+            # Mark the job as done
+            job_queue.task_done()
+            
+        except Exception as e:
+            logger.error(f"Error in worker {thread_name}: {str(e)}")
+            # Sleep a bit to avoid a tight loop in case of persistent errors
+            time.sleep(1)
+
 def process_job(job_id):
     """
-    Process a job asynchronously
+    Add a job to the processing queue
     """
-    # Start job processing in a separate thread to not block the request
-    thread = threading.Thread(target=_process_job_async, args=(job_id,))
-    thread.daemon = True
-    thread.start()
+    # Make sure worker threads are started
+    start_worker_threads()
     
-    return True
+    try:
+        # Add the job to the queue
+        job_queue.put(job_id, block=False)
+        logger.info(f"Added job {job_id} to queue. Queue size: {job_queue.qsize()}/{job_queue.maxsize}")
+        return True
+    except queue.Full:
+        logger.error(f"Job queue is full, cannot add job {job_id}")
+        with app.app_context():
+            job = Job.query.get(job_id)
+            if job:
+                job.status = 'queued'
+                db.session.commit()
+        # Try again in the background after a short delay
+        threading.Timer(5, _retry_add_job, args=(job_id,)).start()
+        return False
+        
+def _retry_add_job(job_id):
+    """
+    Retry adding a job to the queue after a delay
+    """
+    try:
+        logger.info(f"Retrying to add job {job_id} to queue")
+        # Try to add to the queue with blocking and timeout
+        job_queue.put(job_id, block=True, timeout=10)
+        logger.info(f"Successfully added job {job_id} to queue after retry")
+    except (queue.Full, Exception) as e:
+        logger.error(f"Failed to add job {job_id} to queue after retry: {str(e)}")
+        with app.app_context():
+            job = Job.query.get(job_id)
+            if job:
+                job.status = 'error'
+                job.completed_at = datetime.utcnow()
+                db.session.commit()
 
 def _process_job_async(job_id):
     """
     Internal function to process a job asynchronously
     """
+    # Note: Application context is already provided by the worker thread
     try:
         # Get job
-        from flask import current_app
-        with current_app.app_context():
-            job = Job.query.get(job_id)
-            
-            if not job:
-                logger.error(f"Job with ID {job_id} not found")
-                return False
-            
-            # Update job status to processing if not already
-            if job.status != 'processing':
-                job.status = 'processing'
-                db.session.commit()
-            
-            # Get all deals for the job
-            deals = Deal.query.filter_by(job_id=job.id).order_by(Deal.priority).all()
-            
-            if not deals:
-                logger.warning(f"No deals found for job {job_id}")
-                job.status = 'failure'
-                job.completed_at = datetime.utcnow()
-                db.session.commit()
-                return False
-            
-            # Process deals in batches to avoid memory issues
-            total_deals = len(deals)
-            processed_deals = 0
-            success_count = 0
-            failure_count = 0
-            
-            logger.info(f"Starting to process {total_deals} deals for job {job_id}")
-            
-            # Process in batches
-            for i in range(0, total_deals, JOB_BATCH_SIZE):
-                batch = deals[i:i+JOB_BATCH_SIZE]
-                
-                # Process batch with concurrent workers
-                with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS) as executor:
-                    # Submit all deals to the executor
-                    future_to_deal = {executor.submit(_process_deal, deal.id): deal for deal in batch}
-                    
-                    # Process results as they complete
-                    for future in concurrent.futures.as_completed(future_to_deal):
-                        deal = future_to_deal[future]
-                        try:
-                            result = future.result()
-                            processed_deals += 1
-                            
-                            if result:
-                                success_count += 1
-                            else:
-                                failure_count += 1
-                                
-                            # Log progress
-                            if processed_deals % 100 == 0 or processed_deals == total_deals:
-                                logger.info(f"Processed {processed_deals}/{total_deals} deals for job {job_id}")
-                                
-                        except Exception as exc:
-                            logger.error(f"Deal {deal.id} generated an exception: {exc}")
-                            failure_count += 1
-                
-                # Commit changes after each batch
-                db.session.commit()
-            
-            # Update job status based on results
-            if failure_count == 0 and success_count > 0:
-                job.status = 'success'
-            elif success_count == 0:
-                job.status = 'failure'
-            else:
-                job.status = 'partial_success'
-                
+        job = Job.query.get(job_id)
+        
+        if not job:
+            logger.error(f"Job with ID {job_id} not found")
+            return False
+        
+        # Update job status to processing if not already
+        if job.status != 'processing':
+            job.status = 'processing'
+            db.session.commit()
+        
+        # Get all deals for the job
+        deals = Deal.query.filter_by(job_id=job.id).order_by(Deal.priority).all()
+        
+        if not deals:
+            logger.warning(f"No deals found for job {job_id}")
+            job.status = 'failure'
             job.completed_at = datetime.utcnow()
             db.session.commit()
+            return False
+        
+        # Process deals in batches to avoid memory issues
+        total_deals = len(deals)
+        processed_deals = 0
+        success_count = 0
+        failure_count = 0
+        
+        logger.info(f"Starting to process {total_deals} deals for job {job_id}")
+        
+        # Process in batches for better memory management and database performance
+        for i in range(0, total_deals, JOB_BATCH_SIZE):
+            batch = deals[i:i+JOB_BATCH_SIZE]
+            batch_size = len(batch)
             
-            logger.info(f"Job {job_id} completed: {success_count} successes, {failure_count} failures")
+            logger.info(f"Processing batch {i//JOB_BATCH_SIZE + 1} with {batch_size} deals for job {job_id}")
             
-            return True
+            # Create a thread pool for concurrent processing within this batch
+            with concurrent.futures.ThreadPoolExecutor(max_workers=MAX_CONCURRENT_REQUESTS) as executor:
+                # Submit all deals to the executor
+                future_to_deal = {executor.submit(_process_deal, deal.id): deal for deal in batch}
+                
+                # Process results as they complete
+                for future in concurrent.futures.as_completed(future_to_deal):
+                    deal = future_to_deal[future]
+                    try:
+                        result = future.result()
+                        processed_deals += 1
+                        
+                        if result:
+                            success_count += 1
+                        else:
+                            failure_count += 1
+                            
+                        # Log progress more frequently for large batches
+                        if processed_deals % 50 == 0 or processed_deals == total_deals:
+                            logger.info(f"Processed {processed_deals}/{total_deals} deals for job {job_id} (S:{success_count}/F:{failure_count})")
+                            
+                    except Exception as exc:
+                        logger.error(f"Deal {deal.id} generated an exception: {exc}")
+                        failure_count += 1
             
+            # Commit changes after each batch and update job progress
+            job.status = 'processing'
+            db.session.commit()
+            
+            # Give the database a small breather between large batches
+            if batch_size >= 100:
+                time.sleep(0.5)
+        
+        # Update job status based on results
+        if failure_count == 0 and success_count > 0:
+            job.status = 'success'
+        elif success_count == 0:
+            job.status = 'failure'
+        else:
+            job.status = 'partial_success'
+            
+        job.completed_at = datetime.utcnow()
+        db.session.commit()
+        
+        logger.info(f"Job {job_id} completed: {success_count} successes, {failure_count} failures")
+        
+        return True
+        
     except Exception as e:
         logger.error(f"Error processing job {job_id}: {str(e)}")
         
-        # Update job status to failure
-        from flask import current_app
-        with current_app.app_context():
+        try:
+            # Update job status to failure
             job = Job.query.get(job_id)
             if job:
                 job.status = 'failure'
                 job.completed_at = datetime.utcnow()
                 db.session.commit()
-                
+        except Exception as inner_e:
+            logger.error(f"Failed to update job status: {str(inner_e)}")
+            
         return False
 
 def _process_deal(deal_id):
