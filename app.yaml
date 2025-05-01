@@ -1,0 +1,32 @@
+runtime: python39
+
+# Use F2 instance class for high-throughput processing
+instance_class: F2
+
+# Automatic scaling configuration
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10  # Adjust based on expected load
+  target_cpu_utilization: 0.65
+  target_throughput_utilization: 0.65
+  max_concurrent_requests: 50
+
+# Set environment variables
+env_variables:
+  FLASK_ENV: "production"
+  # Do NOT put the actual DATABASE_URL here - use Secret Manager instead
+
+# Use entrypoint to configure Gunicorn for production
+entrypoint: gunicorn -b :$PORT -w 4 --timeout 120 main:app
+
+# Handlers for routing
+handlers:
+- url: /.*
+  script: auto
+
+# For HTTPS enforcement (recommended)
+handlers:
+- url: /.*
+  secure: always
+  redirect_http_response_code: 301
+  script: auto
