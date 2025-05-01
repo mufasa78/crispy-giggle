@@ -13,27 +13,31 @@ def api_key_required(f):
     """
     @wraps(f)
     def decorated_function(*args, **kwargs):
-        # Check if Authorization header is present
-        auth_header = request.headers.get('Authorization')
+        # Check first for X-API-Key header (used by frontend)
+        api_key = request.headers.get('X-API-Key')
         
-        if not auth_header:
-            return jsonify({
-                'success': False,
-                'code': 'unauthorized',
-                'message': 'Authorization header is missing'
-            }), 401
-        
-        # Check if Authorization header is in the correct format
-        parts = auth_header.split()
-        
-        if len(parts) != 2 or parts[0].lower() != 'bearer':
-            return jsonify({
-                'success': False,
-                'code': 'unauthorized',
-                'message': 'Authorization header must be in the format: Bearer {API_KEY}'
-            }), 401
-        
-        api_key = parts[1]
+        # If X-API-Key is not present, check for Authorization header
+        if not api_key:
+            auth_header = request.headers.get('Authorization')
+            
+            if not auth_header:
+                return jsonify({
+                    'success': False,
+                    'code': 'unauthorized',
+                    'message': 'API key is missing. Please provide either X-API-Key header or Authorization header.'
+                }), 401
+            
+            # Check if Authorization header is in the correct format
+            parts = auth_header.split()
+            
+            if len(parts) != 2 or parts[0].lower() != 'bearer':
+                return jsonify({
+                    'success': False,
+                    'code': 'unauthorized',
+                    'message': 'Authorization header must be in the format: Bearer {API_KEY}'
+                }), 401
+            
+            api_key = parts[1]
         
         try:
             # Get user by API key

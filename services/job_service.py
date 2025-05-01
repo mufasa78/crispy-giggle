@@ -288,71 +288,79 @@ def _process_deal(deal_id):
     """
     Process a single deal
     """
-    try:
-        # Get deal
-        deal = Deal.query.get(deal_id)
-        
-        if not deal:
-            logger.error(f"Deal with ID {deal_id} not found")
-            return False
-        
-        # Update deal status to processing
-        deal.status = 1  # processing
-        db.session.commit()
-        
-        # Extract shop_id and item_id from deal_id
+    # Ensure we have an application context for database operations
+    with app.app_context():
         try:
-            shop_id, item_id = ShopeeService.extract_item_id_and_shop_id(deal.deal_id)
-        except ValueError as e:
-            deal.status = 3  # failure
-            deal.error_message = str(e)
-            deal.processed_at = datetime.utcnow()
-            db.session.commit()
-            return False
-        
-        # Fetch product data from Shopee
-        try:
-            product_data = ShopeeService.fetch_product_data(shop_id, item_id)
-            
-            # Create product record
-            product = Product(
-                deal_id=deal.id,
-                shopee_item_id=item_id,
-                raw_data=product_data
-            )
-            db.session.add(product)
-            
-            # Update deal status to success
-            deal.status = 2  # success
-            deal.processed_at = datetime.utcnow()
-            db.session.commit()
-            
-            return True
-            
-        except Exception as e:
-            # Update deal status to failure
-            deal.status = 3  # failure
-            deal.error_message = str(e)
-            deal.processed_at = datetime.utcnow()
-            db.session.commit()
-            
-            return False
-            
-    except Exception as e:
-        logger.error(f"Error processing deal {deal_id}: {str(e)}")
-        
-        try:
-            # Update deal status to failure
+            # Get deal
             deal = Deal.query.get(deal_id)
-            if deal:
+            
+            if not deal:
+                logger.error(f"Deal with ID {deal_id} not found")
+                return False
+            
+            # Check if the job was cancelled
+            job = Job.query.get(deal.job_id)
+            if job and job.cancelled:
+                logger.info(f"Skipping deal {deal_id} as job {deal.job_id} was cancelled")
+                return False
+                
+            # Update deal status to processing
+            deal.status = 1  # processing
+            db.session.commit()
+            
+            # Extract shop_id and item_id from deal_id
+            try:
+                shop_id, item_id = ShopeeService.extract_item_id_and_shop_id(deal.deal_id)
+            except ValueError as e:
                 deal.status = 3  # failure
                 deal.error_message = str(e)
                 deal.processed_at = datetime.utcnow()
                 db.session.commit()
-        except:
-            pass
+                return False
             
-        return False
+            # Fetch product data from Shopee
+            try:
+                product_data = ShopeeService.fetch_product_data(shop_id, item_id)
+                
+                # Create product record
+                product = Product(
+                    deal_id=deal.id,
+                    shopee_item_id=item_id,
+                    raw_data=product_data
+                )
+                db.session.add(product)
+                
+                # Update deal status to success
+                deal.status = 2  # success
+                deal.processed_at = datetime.utcnow()
+                db.session.commit()
+                
+                return True
+                
+            except Exception as e:
+                # Update deal status to failure
+                deal.status = 3  # failure
+                deal.error_message = str(e)
+                deal.processed_at = datetime.utcnow()
+                db.session.commit()
+                
+                return False
+                
+        except Exception as e:
+            logger.error(f"Error processing deal {deal_id}: {str(e)}")
+            
+            try:
+                # Update deal status to failure
+                deal = Deal.query.get(deal_id)
+                if deal:
+                    deal.status = 3  # failure
+                    deal.error_message = str(e)
+                    deal.processed_at = datetime.utcnow()
+                    db.session.commit()
+            except Exception as inner_e:
+                logger.error(f"Failed to update deal status: {str(inner_e)}")
+                
+            return False
 
 def get_job_result(job_id):
     """
