@@ -29,7 +29,8 @@ def _process_job_async(job_id):
     """
     try:
         # Get job
-        with db.app.app_context():
+        from flask import current_app
+        with current_app.app_context():
             job = Job.query.get(job_id)
             
             if not job:
@@ -110,7 +111,8 @@ def _process_job_async(job_id):
         logger.error(f"Error processing job {job_id}: {str(e)}")
         
         # Update job status to failure
-        with db.app.app_context():
+        from flask import current_app
+        with current_app.app_context():
             job = Job.query.get(job_id)
             if job:
                 job.status = 'failure'

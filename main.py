@@ -212,6 +212,82 @@ def import_data():
     
     return render_template('import.html')
 
+@app.route('/import/url', methods=['POST'])
+@login_required
+def import_single_url():
+    # Get current user
+    user_id = session.get('user_id')
+    user = User.query.get(user_id)
+    
+    if not user:
+        session.clear()
+        return redirect(url_for('login'))
+    
+    # Get URL from form
+    shopee_url = request.form.get('shopee_url')
+    
+    if not shopee_url:
+        return render_template('import.html', error='No URL provided')
+    
+    if not 'shopee.tw/' in shopee_url or not '-i.' in shopee_url:
+        return render_template('import.html', error='Invalid Shopee URL format')
+    
+    try:
+        # Process URL and create job
+        from services.shopee_service import ShopeeService
+        from utils.helpers import generate_vendor_job_id
+        
+        # Generate job ID
+        job_name = request.form.get('job_name', '')
+        vendor_job_id = f"{job_name}-{generate_vendor_job_id()}" if job_name else generate_vendor_job_id()
+        
+        # Create new job
+        new_job = Job(
+            vendor_job_id=vendor_job_id,
+            user_id=user.id,
+            status='processing'
+        )
+        db.session.add(new_job)
+        db.session.flush()  # Flush to get the job ID
+        
+        # Extract shop_id and item_id from URL
+        shop_id, item_id = ShopeeService.extract_ids_from_url(shopee_url)
+        
+        # Create deal
+        deal_id = f"{shop_id}.{item_id}"
+        step_id = "1"  # Single URL always has step_id 1
+        
+        new_deal = Deal(
+            job_id=new_job.id,
+            deal_id=deal_id,
+            step_id=step_id,
+            priority=1
+        )
+        db.session.add(new_deal)
+        
+        # Create billing record
+        billing_record = BillingRecord(
+            user_id=user.id,
+            job_id=new_job.id,
+            product_count=1
+        )
+        db.session.add(billing_record)
+        
+        db.session.commit()
+        
+        # Process job asynchronously
+        from services.job_service import process_job
+        process_job(new_job.id)
+        
+        return render_template(
+            'import.html', 
+            success=f'Job created with ID: {vendor_job_id}. Processing URL: {shopee_url}'
+        )
+        
+    except Exception as e:
+        logger.error(f"Error processing URL {shopee_url}: {str(e)}")
+        return render_template('import.html', error=f'Error processing URL: {str(e)}')
+
 @app.route('/job/<int:job_id>')
 @login_required
 def job_detail(job_id):
