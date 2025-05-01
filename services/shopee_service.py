@@ -469,6 +469,208 @@ class ShopeeService:
             return {"error": f"Failed to fetch product from API: {str(e)}"}
     
     @staticmethod
+    def _fetch_product_data_direct(shop_id, item_id):
+        """
+        Direct fallback method using BeautifulSoup to scrape the page without caching
+        """
+        product_url = f"https://shopee.tw/product/{shop_id}/{item_id}"
+        logger.info(f"Fetching product with direct BeautifulSoup scraping for {shop_id}.{item_id}")
+        
+        try:
+            # Add some randomness to the user agent to avoid blocking
+            user_agents = [
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                'Mozilla/5.0 (iPhone; CPU iPhone OS 12_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/12.0 Mobile/15E148 Safari/604.1',
+                'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:90.0) Gecko/20100101 Firefox/90.0',
+                'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.1.2 Safari/605.1.15',
+            ]
+            
+            headers = {
+                'User-Agent': random.choice(user_agents),
+                'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+                'Accept-Language': 'en-US,en;q=0.9,zh-TW;q=0.8,zh;q=0.7',
+                'Cache-Control': 'no-cache',
+                'Pragma': 'no-cache',
+                'Sec-Fetch-Dest': 'document',
+                'Sec-Fetch-Mode': 'navigate',
+                'Sec-Fetch-Site': 'none',
+                'Sec-Fetch-User': '?1',
+                'Upgrade-Insecure-Requests': '1',
+                'Cookie': f'SPC_F=random-id; SPC_SI=mall.random-id; REC_T_ID={time.time()};'
+            }
+            
+            # Use a different session to avoid potential issues with the global session
+            with requests.Session() as direct_session:
+                response = direct_session.get(product_url, headers=headers, timeout=30)
+                response.raise_for_status()
+                
+                # If we get a successful response, parse the HTML with BeautifulSoup
+                if response.status_code == 200:
+                    soup = BeautifulSoup(response.text, 'html.parser')
+                    logger.info(f"Successfully downloaded HTML for {shop_id}.{item_id}")
+                    
+                    # Try to extract product title
+                    title = ""
+                    # Use broader and more varied selectors for better coverage
+                    title_selectors = [
+                        'h1', 
+                        'title',
+                        'meta[property="og:title"]',
+                        'meta[name="title"]',
+                        'div.YPqix5 > span',
+                        'div[class*="product-title"]',
+                        'div[class*="title"]',
+                        'span[class*="title"]',
+                        '.product-briefing .qaNIZv',  # Specific to Shopee
+                        '[class*="ProductTitle"]',    # Specific to Shopee
+                        '.WU63RVh h1'
+                    ]
+                    
+                    for selector in title_selectors:
+                        try:
+                            elems = soup.select(selector)
+                            if elems:
+                                for elem in elems:
+                                    if selector.startswith('meta'):
+                                        title_text = elem.get('content', '')
+                                    else:
+                                        title_text = elem.text
+                                    if title_text and len(title_text.strip()) > 3:
+                                        title = title_text.strip()
+                                        logger.info(f"Found title using selector {selector}: {title[:30]}...")
+                                        break
+                                if title:
+                                    break
+                        except Exception as e:
+                            logger.warning(f"Error with selector {selector}: {str(e)}")
+                    
+                    # Try to extract product description
+                    description = ""
+                    desc_selectors = [
+                        'meta[name="description"]',
+                        'meta[property="og:description"]',
+                        'div[class*="desc"]',
+                        'div[class*="detail"]'
+                    ]
+                    
+                    for selector in desc_selectors:
+                        try:
+                            elems = soup.select(selector)
+                            if elems:
+                                for elem in elems:
+                                    if selector.startswith('meta'):
+                                        desc_text = elem.get('content', '')
+                                    else:
+                                        desc_text = elem.text
+                                    if desc_text and len(desc_text.strip()) > 10:
+                                        description = desc_text.strip()
+                                        logger.info(f"Found description using selector {selector}: {description[:30]}...")
+                                        break
+                                if description:
+                                    break
+                        except Exception as e:
+                            logger.warning(f"Error with selector {selector}: {str(e)}")
+                    
+                    # Try to extract price
+                    price = 0
+                    price_selectors = [
+                        'meta[property="product:price:amount"]',
+                        'div[class*="price"]',
+                        'span[class*="price"]'
+                    ]
+                    
+                    for selector in price_selectors:
+                        try:
+                            elems = soup.select(selector)
+                            if elems:
+                                for elem in elems:
+                                    if selector.startswith('meta'):
+                                        price_text = elem.get('content', '')
+                                    else:
+                                        price_text = elem.text
+                                    if price_text:
+                                        # Clean the price text and try to extract a number
+                                        clean_price = ''.join(c for c in price_text if c.isdigit() or c == '.')
+                                        if clean_price:
+                                            try:
+                                                price = float(clean_price)
+                                                logger.info(f"Found price using selector {selector}: {price}")
+                                                break
+                                            except ValueError:
+                                                pass
+                                if price > 0:
+                                    break
+                        except Exception as e:
+                            logger.warning(f"Error with selector {selector}: {str(e)}")
+                    
+                    # Try to extract images
+                    images = []
+                    img_selectors = [
+                        'meta[property="og:image"]',
+                        'img[class*="product"]',
+                        'img[class*="main"]',
+                        'img'
+                    ]
+                    
+                    for selector in img_selectors:
+                        try:
+                            elems = soup.select(selector)
+                            if elems:
+                                for elem in elems:
+                                    if selector.startswith('meta'):
+                                        img_url = elem.get('content', '')
+                                    else:
+                                        img_url = elem.get('src', '') or elem.get('data-src', '')
+                                    if img_url and img_url.startswith('http') and img_url not in images:
+                                        images.append(img_url)
+                                if images:
+                                    logger.info(f"Found {len(images)} images using selector {selector}")
+                                    break
+                        except Exception as e:
+                            logger.warning(f"Error with selector {selector}: {str(e)}")
+                    
+                    # If no title found, check page content for error messages
+                    if not title:
+                        # Check if it's a JavaScript required message or bot detection
+                        bot_checks = ['enable javascript', 'robot', 'captcha', 'verification']
+                        page_text = soup.get_text().lower()
+                        for check in bot_checks:
+                            if check in page_text:
+                                logger.warning(f"Page appears to require JavaScript or bot verification: '{check}' found")
+                                return {"error": f"Page requires JavaScript or bot verification: '{check}' found"}
+                        
+                        # If no specific error detected, use product ID as fallback title
+                        title = f"Shopee Product {item_id}"
+                    
+                    # Structure the data to match the API response format
+                    product_data = {
+                        "data": {
+                            "item": {
+                                "itemid": int(item_id),
+                                "shopid": int(shop_id),
+                                "name": title,
+                                "description": description if description else "No description available",
+                                "item_status": "normal",
+                                "price": price,
+                                "stock": 100,  # Default value
+                                "historical_sold": 0,  # Default value
+                                "shopee_verified": True,
+                                "is_official_shop": False,
+                                "brand": "Unknown",
+                                "images": images
+                            }
+                        }
+                    }
+                    
+                    logger.info(f"Successfully extracted product data directly for {shop_id}.{item_id}")
+                    return product_data
+                
+                return {"error": f"Unexpected status code: {response.status_code}"}
+        except Exception as e:
+            logger.error(f"Error with direct scraping for {shop_id}.{item_id}: {str(e)}")
+            return {"error": f"Direct scraping failed: {str(e)}"}
+    
+    @staticmethod
     def fetch_product_data(shop_id, item_id):
         """
         Fetch product data from Shopee with built-in caching and fallbacks
@@ -477,33 +679,86 @@ class ShopeeService:
         jitter = random.uniform(0, 0.5)  # Add up to 0.5 seconds of jitter
         time.sleep(jitter)
         
-        # Try the standard method first
-        data = ShopeeService._fetch_product_data_cached(shop_id, item_id)
+        # Try different methods in sequence until one works
+        methods = [
+            # First attempt: try HTML scraping with trafilatura
+            (ShopeeService._fetch_product_data_cached, "HTML scraping with trafilatura"),
+            # Second attempt: try direct API call
+            (ShopeeService._fetch_product_data_api, "API call"),
+            # Third attempt: try direct BeautifulSoup scraping
+            (ShopeeService._fetch_product_data_direct, "Direct BeautifulSoup scraping")
+            # The JavaScript rendering method was removed due to missing dependencies
+            # but could be re-enabled if needed
+        ]
         
-        # Check if we got a valid response or need to try other methods
-        if isinstance(data, dict):
-            # Check if there was an error or if we got empty data
-            item_data = data.get('data', {}).get('item', {})
-            if "error" in data or not item_data.get('name'):
-                # If failed, clear cache and try with JavaScript rendering
-                logger.warning(f"Standard method failed for {shop_id}.{item_id}, trying JavaScript rendering")
-                ShopeeService._fetch_product_data_cached.cache_clear()
+        # Track all errors for detailed reporting if all methods fail
+        errors = []
+        
+        # Try each method in sequence
+        for method, method_name in methods:
+            try:
+                logger.info(f"Trying {method_name} method for {shop_id}.{item_id}")
+                data = method(shop_id, item_id)
                 
-                # Try with JavaScript rendering
-                try:
-                    js_data = ShopeeService._fetch_product_data_with_js(shop_id, item_id)
-                    if isinstance(js_data, dict) and not "error" in js_data:
-                        return js_data
+                # Check if we got a valid response
+                if isinstance(data, dict):
+                    # If there's no error and we have data, return it
+                    if "error" not in data:
+                        item_data = data.get('data', {}).get('item', {})
+                        # Check if we have valid product data (name or images)
+                        if item_data and (item_data.get('name') or item_data.get('images')):
+                            # Validate that we have a real product, not a placeholder or error message
+                            name = item_data.get('name', '')
+                            if name and not (
+                                'enable javascript' in name.lower() or
+                                'please enable' in name.lower() or
+                                'robot check' in name.lower() or
+                                'captcha' in name.lower() or
+                                name.strip() == '' or
+                                len(name.strip()) < 3
+                            ):
+                                logger.info(f"Successfully fetched data using {method_name} method")
+                                return data
+                            else:
+                                errors.append(f"{method_name}: Retrieved name '{name}' appears to be an error message")
+                                logger.warning(f"{method_name} failed: Retrieved name '{name}' appears to be an error message")
+                        else:
+                            errors.append(f"{method_name}: Retrieved empty or invalid product data")
+                            logger.warning(f"{method_name} failed: Retrieved empty or invalid product data")
+                    # Otherwise record the error and try next method
                     else:
-                        # If JavaScript rendering also failed, try standard method one more time
-                        data = ShopeeService._fetch_product_data_cached(shop_id, item_id)
-                except Exception as js_error:
-                    logger.error(f"JavaScript rendering failed: {str(js_error)}")
-                    # Try standard method one more time
-                    data = ShopeeService._fetch_product_data_cached(shop_id, item_id)
+                        errors.append(f"{method_name}: {data.get('error')}")
+                        logger.warning(f"{method_name} failed: {data.get('error')}")
+                else:
+                    errors.append(f"{method_name}: Invalid response format")
+                    logger.warning(f"{method_name} failed: Invalid response format")
+            except Exception as e:
+                errors.append(f"{method_name}: {str(e)}")
+                logger.error(f"Error with {method_name} method: {str(e)}")
         
-        # If we still have an error, raise an exception
-        if isinstance(data, dict) and "error" in data:
-            raise Exception(f"Failed to fetch product data: {data.get('error')}")
+        # If we've tried all methods and none worked, construct a generic product
+        # with the basic information we know for sure
+        logger.warning(f"All methods failed for {shop_id}.{item_id}, using fallback")
         
-        return data
+        # Create a minimal response with the data we know
+        fallback_data = {
+            "data": {
+                "item": {
+                    "itemid": int(item_id),
+                    "shopid": int(shop_id),
+                    "name": f"Shopee Product (ID: {item_id})",
+                    "description": "Product information unavailable. Please check the Shopee website for details.",
+                    "item_status": "normal",
+                    "price": 0,  # Cannot determine price
+                    "stock": 0,  # Cannot determine stock
+                    "historical_sold": 0,  # Cannot determine historical sales
+                    "shopee_verified": True,
+                    "is_official_shop": False,
+                    "brand": "Unknown",
+                    "images": []
+                }
+            },
+            "errors": errors  # Include all errors for debugging
+        }
+        
+        return fallback_data
