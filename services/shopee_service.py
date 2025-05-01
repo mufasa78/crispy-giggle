@@ -425,16 +425,34 @@ class ShopeeService:
                 'sec-fetch-site': 'same-origin'
             }
             
+            # Generate more realistic cookies
             cookies = {
-                'SPC_F': 'your-random-id',  # This is just a placeholder
-                'SPC_SI': 'mall.abcdefghijklmnopqrstuvwxyz',  # This is just a placeholder
-                '_gcl_au': '1.1.123456789.1234567890',
+                'SPC_F': f'shopee_{int(time.time())}',
+                'SPC_R_T_ID': f'{random.randint(10000, 99999)}',
+                'SPC_T_ID': f'{random.randint(10000, 99999)}',
+                'SPC_U': f'{random.randint(10000, 99999)}',
+                'SPC_SI': f'mall.{random.randint(100000, 999999)}',
+                '_gcl_au': f'1.1.{random.randint(1000000000, 9999999999)}.{int(time.time())}',
                 '_med': 'refer', 
                 'language': 'en',
-                'csrftoken': 'random-csrf-token'
+                'csrftoken': f'shopee_{random.randint(100000, 999999)}',
+                'SPC_EC': f'{random.randint(100000, 999999)}',
+                # Adding anti-bot fingerprinting cookies
+                'REC_T_ID': f'{random.randint(100000, 999999)}_{int(time.time())}',
+                'SPC_ST': f'.{random.randint(100000, 999999)}_{int(time.time())}'
             }
             
-            response = session.get(api_url, headers=headers, cookies=cookies, timeout=30)
+            # Use a different session to avoid potential issues with the global session
+            with requests.Session() as api_session:
+                # Add cookies to the session
+                for name, value in cookies.items():
+                    api_session.cookies.set(name, value)
+                
+                # Add a delay to make it look more like a real browser
+                time.sleep(random.uniform(0.5, 1.5))
+                
+                # Make the API request with headers and cookies
+                response = api_session.get(api_url, headers=headers, timeout=30)
             logger.info(f"API response status: {response.status_code}")
             
             if response.status_code == 200:
@@ -495,13 +513,38 @@ class ShopeeService:
                 'Sec-Fetch-Mode': 'navigate',
                 'Sec-Fetch-Site': 'none',
                 'Sec-Fetch-User': '?1',
-                'Upgrade-Insecure-Requests': '1',
-                'Cookie': f'SPC_F=random-id; SPC_SI=mall.random-id; REC_T_ID={time.time()};'
+                'Upgrade-Insecure-Requests': '1'
+            }
+            
+            # Generate more realistic cookies
+            cookies = {
+                'SPC_F': f'shopee_{int(time.time())}',
+                'SPC_R_T_ID': f'{random.randint(10000, 99999)}',
+                'SPC_T_ID': f'{random.randint(10000, 99999)}',
+                'SPC_U': f'{random.randint(10000, 99999)}',
+                'SPC_SI': f'mall.{random.randint(100000, 999999)}',
+                '_gcl_au': f'1.1.{random.randint(1000000000, 9999999999)}.{int(time.time())}',
+                '_med': 'refer', 
+                'language': 'en',
+                'csrftoken': f'shopee_{random.randint(100000, 999999)}',
+                'SPC_EC': f'{random.randint(100000, 999999)}',
+                # Adding anti-bot fingerprinting cookies
+                'REC_T_ID': f'{random.randint(100000, 999999)}_{int(time.time())}',
+                'SPC_ST': f'.{random.randint(100000, 999999)}_{int(time.time())}'
             }
             
             # Use a different session to avoid potential issues with the global session
             with requests.Session() as direct_session:
+                # Add cookies to the session
+                for name, value in cookies.items():
+                    direct_session.cookies.set(name, value)
+                
+                # Add a delay to make it look more like a real browser
+                time.sleep(random.uniform(0.5, 1.5))
+                
+                # Make the request with headers and cookies
                 response = direct_session.get(product_url, headers=headers, timeout=30)
+                logger.info(f"Response status code: {response.status_code}")
                 response.raise_for_status()
                 
                 # If we get a successful response, parse the HTML with BeautifulSoup
