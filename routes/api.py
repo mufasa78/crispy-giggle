@@ -147,12 +147,17 @@ def cancel_job_api(vendor_job_id):
     """
     Cancel a job that is in progress
     """
+    logger.info(f"Received cancel request for job {vendor_job_id}")
+    logger.info(f"Request headers: {request.headers}")
+    
     try:
         # Get current user from API key
         current_user = request.current_user
+        logger.info(f"User authenticated: {current_user.username}")
         
         # Get job by vendor_job_id
         job = Job.query.filter_by(vendor_job_id=vendor_job_id).first()
+        logger.info(f"Job found: {job is not None}")
         
         if not job:
             return jsonify({
@@ -178,7 +183,9 @@ def cancel_job_api(vendor_job_id):
             }), 400
         
         # Cancel the job
+        logger.info(f"Attempting to cancel job {job.id}")
         result = cancel_job(job.id)
+        logger.info(f"Cancel job result: {result}")
         
         if result:
             return jsonify({
