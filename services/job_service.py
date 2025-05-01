@@ -124,23 +124,38 @@ def cancel_job(job_id):
                 logger.warning(f"Cannot cancel job {job_id} because it is already in state: {job.status}")
                 return False
                 
-            # Mark job as cancelled
+            # Mark job as cancelled - this is the most important part
             job.cancelled = True
             job.status = 'cancelled'
             job.completed_at = datetime.utcnow()
-            db.session.commit()
             
-            logger.info(f"Job {job_id} has been marked as cancelled")
+            try:
+                db.session.commit()
+                logger.info(f"Job {job_id} has been marked as cancelled")
+            except Exception as commit_error:
+                db.session.rollback()
+                logger.error(f"Error committing job cancellation: {str(commit_error)}")
+                return False
+            
+            # Remove from active jobs set if present
+            if job_id in active_jobs:
+                active_jobs.discard(job_id)
+                logger.info(f"Removed job {job_id} from active jobs set")
             
             # Update any unprocessed deals to cancelled state
-            unprocessed_deals = Deal.query.filter(Deal.job_id == job_id, Deal.status == 1).all()
-            for deal in unprocessed_deals:
-                deal.status = 3  # failure
-                deal.error_message = "Job cancelled by user"
-                deal.processed_at = datetime.utcnow()
-            
-            db.session.commit()
-            logger.info(f"Updated {len(unprocessed_deals)} unprocessed deals for cancelled job {job_id}")
+            try:
+                unprocessed_deals = Deal.query.filter(Deal.job_id == job_id, Deal.status == 1).all()
+                for deal in unprocessed_deals:
+                    deal.status = 3  # failure
+                    deal.error_message = "Job cancelled by user"
+                    deal.processed_at = datetime.utcnow()
+                
+                db.session.commit()
+                logger.info(f"Updated {len(unprocessed_deals)} unprocessed deals for cancelled job {job_id}")
+            except Exception as deal_error:
+                db.session.rollback()
+                logger.error(f"Error updating deals for cancelled job: {str(deal_error)}")
+                # We still return True since the job itself was marked as cancelled
             
             return True
             

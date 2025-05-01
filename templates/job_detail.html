@@ -338,29 +338,38 @@
                         cancelJobBtn.disabled = true;
                         cancelJobBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Cancelling...';
                         
+                        console.log('Attempting to cancel job: {{ job.vendor_job_id }}');
+                        
                         // Call the cancel API
                         fetch('/api/v1/job/cancel/{{ job.vendor_job_id }}', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'X-API-Key': '{{ user.api_key }}'
-                            }
+                            },
+                            credentials: 'same-origin'
                         })
-                        .then(response => response.json())
+                        .then(response => {
+                            console.log('Response status:', response.status);
+                            if (!response.ok) {
+                                throw new Error(`HTTP error! Status: ${response.status}`);
+                            }
+                            return response.json();
+                        })
                         .then(data => {
+                            console.log('Response data:', data);
                             if (data.success) {
                                 // Success - reload page
+                                alert('Job has been successfully cancelled!');
                                 window.location.reload();
                             } else {
                                 // Error
-                                alert('Failed to cancel job: ' + (data.message || 'Unknown error'));
-                                cancelJobBtn.disabled = false;
-                                cancelJobBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Cancel Job';
+                                throw new Error(data.message || 'Unknown error');
                             }
                         })
                         .catch(error => {
                             console.error('Error cancelling job:', error);
-                            alert('An error occurred while trying to cancel the job. Please try again.');
+                            alert('An error occurred while trying to cancel the job: ' + error.message);
                             cancelJobBtn.disabled = false;
                             cancelJobBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Cancel Job';
                         });
