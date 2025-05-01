@@ -76,10 +76,17 @@
             </div>
             <div>
                 {% if job.status == 'processing' %}
-                <div class="spinner-border text-primary me-2" role="status">
-                    <span class="visually-hidden">Loading...</span>
+                <div class="d-flex align-items-center">
+                    <div class="spinner-border text-primary me-2" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <span class="text-warning me-3">Processing...</span>
+                    <button id="cancelJobBtn" class="btn btn-sm btn-danger">
+                        <i class="bi bi-x-circle me-1"></i>Cancel Job
+                    </button>
                 </div>
-                <span class="text-warning">Processing...</span>
+                {% elif job.status == 'cancelled' %}
+                <span class="badge bg-secondary">Cancelled</span>
                 {% endif %}
             </div>
         </div>
@@ -103,6 +110,8 @@
                                             <span class="badge bg-warning">Processing</span>
                                             {% elif job.status == 'failure' %}
                                             <span class="badge bg-danger">Failed</span>
+                                            {% elif job.status == 'cancelled' %}
+                                            <span class="badge bg-secondary">Cancelled</span>
                                             {% else %}
                                             <span class="badge bg-info">{{ job.status }}</span>
                                             {% endif %}
@@ -318,6 +327,45 @@
                 setTimeout(function() {
                     window.location.reload();
                 }, 5000); // Refresh every 5 seconds
+            }
+            
+            // Cancel job button functionality
+            const cancelJobBtn = document.getElementById('cancelJobBtn');
+            if (cancelJobBtn) {
+                cancelJobBtn.addEventListener('click', function() {
+                    if (confirm('Are you sure you want to cancel this job? This action cannot be undone.')) {
+                        // Show loading state
+                        cancelJobBtn.disabled = true;
+                        cancelJobBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>Cancelling...';
+                        
+                        // Call the cancel API
+                        fetch('/api/v1/job/cancel/{{ job.vendor_job_id }}', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-API-Key': '{{ user.api_key }}'
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Success - reload page
+                                window.location.reload();
+                            } else {
+                                // Error
+                                alert('Failed to cancel job: ' + (data.message || 'Unknown error'));
+                                cancelJobBtn.disabled = false;
+                                cancelJobBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Cancel Job';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error cancelling job:', error);
+                            alert('An error occurred while trying to cancel the job. Please try again.');
+                            cancelJobBtn.disabled = false;
+                            cancelJobBtn.innerHTML = '<i class="bi bi-x-circle me-1"></i>Cancel Job';
+                        });
+                    }
+                });
             }
         });
     </script>

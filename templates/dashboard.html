@@ -110,6 +110,8 @@
                                             <span class="badge bg-warning">Processing</span>
                                             {% elif job.status == 'failure' %}
                                             <span class="badge bg-danger">Failed</span>
+                                            {% elif job.status == 'cancelled' %}
+                                            <span class="badge bg-secondary">Cancelled</span>
                                             {% else %}
                                             <span class="badge bg-info">{{ job.status }}</span>
                                             {% endif %}

@@ -324,7 +324,8 @@ def job_detail(job_id):
         deals=deals,
         success_count=success_count,
         failure_count=failure_count,
-        job_result=job_result
+        job_result=job_result,
+        user=user
     )
 
 @app.route('/job/<int:job_id>/export')
