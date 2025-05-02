@@ -1,6 +1,7 @@
 import os
 import logging
 import json
+import hashlib
 from functools import wraps
 from app import app, db
 from flask import render_template, redirect, url_for, request, session, flash, jsonify
@@ -63,6 +64,17 @@ def login():
         
         # Find user by username
         user = User.query.filter_by(username=username).first()
+        
+        # Debug information
+        if user:
+            logger.debug(f"Login attempt for user: {username}")
+            logger.debug(f"Stored password hash: {user.password_hash}")
+            logger.debug(f"Input password: {password}")
+            input_hash = hashlib.sha256(password.encode()).hexdigest()
+            logger.debug(f"Generated hash for input: {input_hash}")
+            logger.debug(f"Hash match: {user.password_hash == input_hash}")
+        else:
+            logger.debug(f"User not found: {username}")
         
         # Check if user exists and password is correct
         if user and verify_password(user.password_hash, password):
