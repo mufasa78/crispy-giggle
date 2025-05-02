@@ -11,20 +11,20 @@ services:
       - SESSION_SECRET=${SESSION_SECRET:-defaultsecretkeythatshouldbereplacedingproduction}
     volumes:
       - ./cookies.txt:/app/cookies.txt
+    depends_on:
+      - db
 
-  # Uncomment this section if you want to include a database directly in the compose setup
-  # db:
-  #   image: postgres:15-alpine
-  #   restart: unless-stopped
-  #   environment:
-  #     - POSTGRES_PASSWORD=postgres
-  #     - POSTGRES_USER=postgres
-  #     - POSTGRES_DB=shopeescraper
-  #   volumes:
-  #     - postgres_data:/var/lib/postgresql/data
-  #   ports:
-  #     - "5432:5432"
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_USER=postgres
+      - POSTGRES_DB=shopeescraper
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
 
-# Uncomment this if you're using the db service
-# volumes:
-#   postgres_data:
+volumes:
+  postgres_data:
