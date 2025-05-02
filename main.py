@@ -4,9 +4,13 @@ import json
 from functools import wraps
 from app import app, db
 from flask import render_template, redirect, url_for, request, session, flash, jsonify
+from flask_cors import CORS
 from models import User, Job, Deal, Product, BillingRecord
 from utils.helpers import hash_password, verify_password, generate_api_key
 from flask_swagger_ui import get_swaggerui_blueprint
+
+# Enable CORS for the API
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -115,6 +119,38 @@ def dashboard():
         success_rate=success_rate,
         api_key=user.api_key
     )
+
+@app.route('/api-keys')
+@login_required
+def api_keys():
+    # Get current user
+    user_id = session.get('user_id')
+    user = User.query.get(user_id)
+    
+    if not user:
+        session.clear()
+        return redirect(url_for('login'))
+    
+    return render_template('api_keys.html', api_key=user.api_key)
+
+@app.route('/api-keys/regenerate', methods=['POST'])
+@login_required
+def regenerate_api_key():
+    # Get current user
+    user_id = session.get('user_id')
+    user = User.query.get(user_id)
+    
+    if not user:
+        session.clear()
+        return redirect(url_for('login'))
+    
+    # Generate new API key
+    new_api_key = generate_api_key()
+    user.api_key = new_api_key
+    db.session.commit()
+    
+    flash('API key regenerated successfully', 'success')
+    return redirect(url_for('api_keys'))
 
 @app.route('/import', methods=['GET', 'POST'])
 @login_required

@@ -1,0 +1,71 @@
+{% extends 'layout.html' %}
+{% block title %}API Keys{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="display-4 mb-4">API Keys</h1>
+    
+    {% if error %}
+    <div class="alert alert-danger" role="alert">
+        {{ error }}
+    </div>
+    {% endif %}
+    
+    {% if success %}
+    <div class="alert alert-success" role="alert">
+        {{ success }}
+    </div>
+    {% endif %}
+    
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">Your API Key</div>
+        <div class="card-body">
+            {% if api_key %}
+            <div class="input-group mb-3">
+                <input type="text" class="form-control" value="{{ api_key }}" id="apiKeyField" readonly>
+                <button class="btn btn-outline-secondary" type="button" onclick="copyApiKey()">Copy</button>
+            </div>
+            <p class="text-muted">Use this key in the X-API-Key header for API requests</p>
+            <form action="{{ url_for('regenerate_api_key') }}" method="POST" class="d-inline">
+                <button type="submit" class="btn btn-warning" onclick="return confirm('Are you sure? This will invalidate your current API key.')">
+                    Regenerate API Key
+                </button>
+            </form>
+            {% else %}
+            <p>No API key found. Generate a new one.</p>
+            <form action="{{ url_for('regenerate_api_key') }}" method="POST">
+                <button type="submit" class="btn btn-primary">Generate API Key</button>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+    
+    <div class="card">
+        <div class="card-header bg-info text-white">API Usage Instructions</div>
+        <div class="card-body">
+            <h5>Authentication</h5>
+            <p>Include your API key in all requests using the <code>X-API-Key</code> header:</p>
+            <pre><code>X-API-Key: {{ api_key|default('your_api_key_here') }}</code></pre>
+            
+            <h5>Endpoints</h5>
+            <ul>
+                <li><code>POST /api/v1/job/create</code> - Create a new job</li>
+                <li><code>POST /api/v1/job/cancel/{vendor_job_id}</code> - Cancel a job</li>
+                <li><code>GET /api/v1/job/result/{vendor_job_id}</code> - Get job results</li>
+            </ul>
+            
+            <h5>Full Documentation</h5>
+            <p>View the complete API documentation <a href="/api/docs" target="_blank">here</a>.</p>
+        </div>
+    </div>
+</div>
+
+<script>
+function copyApiKey() {
+    var apiKeyField = document.getElementById("apiKeyField");
+    apiKeyField.select();
+    document.execCommand("copy");
+    alert("API key copied to clipboard!");
+}
+</script>
+{% endblock %}

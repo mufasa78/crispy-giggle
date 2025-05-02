@@ -1,18 +1,40 @@
 import logging
 from functools import wraps
-from flask import request, jsonify, g
+from flask import request, jsonify, g, make_response
+from flask_cors import cross_origin
 
 from models import User
 
 # Configure logging
 logger = logging.getLogger(__name__)
 
+def handle_options_request(f):
+    """
+    Decorator to handle OPTIONS requests for CORS preflight
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if request.method == 'OPTIONS':
+            response = make_response()
+            response.headers.add('Access-Control-Allow-Origin', '*')
+            response.headers.add('Access-Control-Allow-Headers', 'Content-Type, X-API-Key, Authorization')
+            response.headers.add('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
+            return response
+        return f(*args, **kwargs)
+    return decorated_function
+
 def api_key_required(f):
     """
     Decorator to require API key authentication
     """
     @wraps(f)
+    @handle_options_request
+    @cross_origin()
     def decorated_function(*args, **kwargs):
+        # Handle CORS preflight requests
+        if request.method == 'OPTIONS':
+            return make_response()
+            
         # Check first for X-API-Key header (used by frontend)
         api_key = request.headers.get('X-API-Key')
         
