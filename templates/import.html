@@ -1,159 +1,74 @@
-<!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Import Data - Shopee Product Data API</title>
-    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="/">Shopee Product Data API</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav me-auto">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/">Home</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/dashboard">Dashboard</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link active" aria-current="page" href="/import">Import Data</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/docs">API Documentation</a>
-                    </li>
-                </ul>
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link" href="/logout">Logout</a>
-                    </li>
-                </ul>
+{% extends 'layout.html' %}
+{% block title %}Import Data{% endblock %}
+
+{% block content %}
+<div class="container mt-5">
+    <h1 class="display-4 mb-4">Import Data</h1>
+    
+    {% if error %}
+    <div class="alert alert-danger" role="alert">
+        {{ error }}
+    </div>
+    {% endif %}
+    
+    {% if success %}
+    <div class="alert alert-success" role="alert">
+        {{ success }}
+    </div>
+    {% endif %}
+    
+    <div class="row">
+        <div class="col-md-6">
+            <!-- Import from CSV -->
+            <div class="card mb-4">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0">Import from CSV</h5>
+                </div>
+                <div class="card-body">
+                    <p>Upload a CSV file containing Shopee product URLs.</p>
+                    <form method="POST" action="{{ url_for('import_data') }}" enctype="multipart/form-data">
+                        <div class="mb-3">
+                            <label for="job_name" class="form-label">Job Name (Optional)</label>
+                            <input type="text" class="form-control" id="job_name" name="job_name" placeholder="My Shopee Job">
+                        </div>
+                        <div class="mb-3">
+                            <label for="csv_file" class="form-label">CSV File</label>
+                            <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
+                            <div class="form-text">CSV should have URLs in the second column (after header row)</div>
+                        </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-primary">Upload and Process</button>
+                        </div>
+                    </form>
+                </div>
             </div>
         </div>
-    </nav>
-
-    <div class="container mt-4">
-        <div class="row">
-            <div class="col-md-12">
-                <h1>Import Shopee Data</h1>
-                <p class="lead">Upload a CSV file with Shopee product URLs to import data.</p>
-                
-                {% if error %}
-                <div class="alert alert-danger" role="alert">
-                    {{ error }}
+        
+        <div class="col-md-6">
+            <!-- Import single URL -->
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Import Single URL</h5>
                 </div>
-                {% endif %}
-                
-                {% if success %}
-                <div class="alert alert-success" role="alert">
-                    {{ success }}
-                </div>
-                {% endif %}
-                
-                <div class="card mb-4">
-                    <div class="card-header">
-                        <h5 class="mb-0">Import Options</h5>
-                    </div>
-                    <div class="card-body">
-                        <ul class="nav nav-tabs" id="importTabs" role="tablist">
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link active" id="single-url-tab" data-bs-toggle="tab" data-bs-target="#single-url" type="button" role="tab" aria-controls="single-url" aria-selected="true">
-                                    <i class="bi bi-link me-1"></i>Single URL
-                                </button>
-                            </li>
-                            <li class="nav-item" role="presentation">
-                                <button class="nav-link" id="csv-upload-tab" data-bs-toggle="tab" data-bs-target="#csv-upload" type="button" role="tab" aria-controls="csv-upload" aria-selected="false">
-                                    <i class="bi bi-file-earmark-spreadsheet me-1"></i>CSV Upload
-                                </button>
-                            </li>
-                        </ul>
-                        
-                        <div class="tab-content mt-3" id="importTabsContent">
-                            <!-- Single URL Tab -->
-                            <div class="tab-pane fade show active" id="single-url" role="tabpanel" aria-labelledby="single-url-tab">
-                                <form method="post" action="/import/url">
-                                    <div class="mb-3">
-                                        <label for="shopee_url" class="form-label">Shopee Product URL</label>
-                                        <input type="url" class="form-control" id="shopee_url" name="shopee_url" placeholder="https://shopee.tw/product-name-i.104581011.24901963692" required>
-                                        <div class="form-text">Enter a valid Shopee product URL in the format: https://shopee.tw/xxx-i.{shop_id}.{item_id}</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="single_job_name" class="form-label">Job Name (Optional)</label>
-                                        <input type="text" class="form-control" id="single_job_name" name="job_name" placeholder="Enter a name for this import job">
-                                    </div>
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="bi bi-search me-2"></i>Fetch Product Data
-                                    </button>
-                                </form>
-                            </div>
-                            
-                            <!-- CSV Upload Tab -->
-                            <div class="tab-pane fade" id="csv-upload" role="tabpanel" aria-labelledby="csv-upload-tab">
-                                <form method="post" action="/import" enctype="multipart/form-data">
-                                    <div class="mb-3">
-                                        <label for="csv_file" class="form-label">CSV File</label>
-                                        <input type="file" class="form-control" id="csv_file" name="csv_file" accept=".csv" required>
-                                        <div class="form-text">CSV format: column 1 = index, column 2 = Shopee product URL</div>
-                                    </div>
-                                    <div class="mb-3">
-                                        <label for="job_name" class="form-label">Job Name (Optional)</label>
-                                        <input type="text" class="form-control" id="job_name" name="job_name" placeholder="Enter a name for this import job">
-                                    </div>
-                                    <button type="submit" class="btn btn-primary">
-                                        <i class="bi bi-cloud-upload me-2"></i>Upload and Process
-                                    </button>
-                                </form>
-                            </div>
+                <div class="card-body">
+                    <p>Process a single Shopee product URL.</p>
+                    <form method="POST" action="{{ url_for('import_single_url') }}">
+                        <div class="mb-3">
+                            <label for="job_name" class="form-label">Job Name (Optional)</label>
+                            <input type="text" class="form-control" id="job_name" name="job_name" placeholder="My Single URL Job">
                         </div>
-                    </div>
-                </div>
-                
-                <div class="card">
-                    <div class="card-header">
-                        <h5 class="mb-0">Instructions</h5>
-                    </div>
-                    <div class="card-body">
-                        <h6 class="mb-3">Option 1: Single URL Import</h6>
-                        <ol>
-                            <li>Enter a Shopee product URL in the "Single URL" tab</li>
-                            <li>The system will extract the shop_id and item_id from the URL</li>
-                            <li>A job will be created to fetch data for this product</li>
-                            <li>View the results in your dashboard once processing is complete</li>
-                        </ol>
-                        
-                        <h6 class="mb-3 mt-4">Option 2: Batch Import with CSV</h6>
-                        <ol>
-                            <li>Prepare a CSV file with Shopee product URLs (use the provided test_items_ids file format)</li>
-                            <li>Upload the file using the "CSV Upload" tab</li>
-                            <li>The system will extract the shop_id and item_id from each URL</li>
-                            <li>A job will be created to fetch data for all products</li>
-                            <li>View the results in your dashboard once processing is complete</li>
-                        </ol>
-                        
-                        <div class="alert alert-info mt-3">
-                            <i class="bi bi-info-circle me-2"></i>URL must follow this format: <code>https://shopee.tw/product-name-i.104581011.24901963692</code>
-                            <br>
-                            <small>The important part is the <code>-i.{shop_id}.{item_id}</code> pattern at the end of the URL.</small>
+                        <div class="mb-3">
+                            <label for="shopee_url" class="form-label">Shopee Product URL</label>
+                            <input type="url" class="form-control" id="shopee_url" name="shopee_url" placeholder="https://shopee.tw/product-name-i.12345.67890" required>
+                            <div class="form-text">Example: https://shopee.tw/product-name-i.12345.67890</div>
                         </div>
-                    </div>
+                        <div class="d-grid">
+                            <button type="submit" class="btn btn-secondary">Process URL</button>
+                        </div>
+                    </form>
                 </div>
             </div>
         </div>
     </div>
-
-    <footer class="footer mt-5 py-3 bg-dark">
-        <div class="container text-center">
-            <span class="text-muted">© 2023 Shopee Product Data API. All rights reserved.</span>
-        </div>
-    </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+</div>
+{% endblock %}
