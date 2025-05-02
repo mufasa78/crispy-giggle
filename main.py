@@ -1,14 +1,38 @@
 import os
 import logging
+import json
 from functools import wraps
 from app import app, db
-from flask import render_template, redirect, url_for, request, session, flash
+from flask import render_template, redirect, url_for, request, session, flash, jsonify
 from models import User, Job, Deal, Product, BillingRecord
 from utils.helpers import hash_password, verify_password, generate_api_key
+from flask_swagger_ui import get_swaggerui_blueprint
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
+
+# Configure Swagger UI
+SWAGGER_URL = '/api/docs'  # URL for exposing Swagger UI
+API_URL = '/static/swagger.json'  # Our API url (can of course be a local resource)
+
+# Call factory function to create our blueprint
+swaggerui_blueprint = get_swaggerui_blueprint(
+    SWAGGER_URL,
+    API_URL,
+    config={  # Swagger UI config overrides
+        'app_name': "Shopee Data API"
+    }
+)
+
+# Register blueprint at URL
+app.register_blueprint(swaggerui_blueprint, url_prefix=SWAGGER_URL)
+
+# Create a route to expose the API documentation
+@app.route('/static/swagger.json')
+def get_swagger():
+    with open('static/swagger.json', 'r') as f:
+        return jsonify(json.load(f))
 
 # Set up login_required decorator
 def login_required(f):

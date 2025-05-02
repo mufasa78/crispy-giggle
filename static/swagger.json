@@ -1,0 +1,547 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "description": "API for Shopee Taiwan product data scraping and processing",
+    "version": "1.0.0",
+    "title": "Shopee Data API",
+    "contact": {
+      "email": "support@example.com"
+    },
+    "license": {
+      "name": "Proprietary"
+    }
+  },
+  "basePath": "/api/v1",
+  "tags": [
+    {
+      "name": "Job",
+      "description": "Job management operations"
+    },
+    {
+      "name": "Info",
+      "description": "API information endpoints"
+    }
+  ],
+  "schemes": ["http", "https"],
+  "securityDefinitions": {
+    "ApiKeyAuth": {
+      "type": "apiKey",
+      "name": "X-API-Key",
+      "in": "header"
+    }
+  },
+  "paths": {
+    "/": {
+      "get": {
+        "tags": ["Info"],
+        "summary": "API information endpoint",
+        "description": "Returns API name, version and status",
+        "produces": ["application/json"],
+        "responses": {
+          "200": {
+            "description": "Successful operation",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string",
+                  "example": "Shopee Product Data API"
+                },
+                "version": {
+                  "type": "string",
+                  "example": "v1"
+                },
+                "status": {
+                  "type": "string",
+                  "example": "active"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/job/create": {
+      "post": {
+        "tags": ["Job"],
+        "summary": "Create a new scraping job",
+        "description": "Creates a new job to process multiple Shopee product IDs",
+        "consumes": ["application/json"],
+        "produces": ["application/json"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "body",
+            "name": "body",
+            "description": "Job creation parameters",
+            "required": true,
+            "schema": {
+              "type": "object",
+              "properties": {
+                "job_id": {
+                  "type": "string",
+                  "description": "Optional job ID, generated if not provided",
+                  "example": "34c4e7623450"
+                },
+                "deals": {
+                  "type": "array",
+                  "description": "List of deals to process",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "deal_id": {
+                        "type": "string",
+                        "description": "Deal ID in format shop_id.item_id",
+                        "example": "1988776.7648272833"
+                      },
+                      "step_id": {
+                        "type": "string",
+                        "description": "Step ID",
+                        "example": "123546"
+                      },
+                      "priority": {
+                        "type": "integer",
+                        "description": "Processing priority (lower is higher priority)",
+                        "example": 2
+                      }
+                    },
+                    "required": ["deal_id", "step_id", "priority"]
+                  }
+                }
+              },
+              "required": ["deals"]
+            }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "Job created successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "code": {
+                  "type": "string",
+                  "example": null
+                },
+                "message": {
+                  "type": "string",
+                  "example": null
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "vendor_job_id": {
+                      "type": "string",
+                      "example": "34c4e7623450"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "invalid_deals"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Deals are required and must be a non-empty list"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "unauthorized"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Invalid or missing API key"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "server_error"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "An error occurred while creating the job"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/job/cancel/{vendor_job_id}": {
+      "post": {
+        "tags": ["Job"],
+        "summary": "Cancel a job",
+        "description": "Cancels a job that is in progress",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "vendor_job_id",
+            "in": "path",
+            "description": "Job ID to cancel",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job cancelled successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "code": {
+                  "type": "string",
+                  "example": null
+                },
+                "message": {
+                  "type": "string",
+                  "example": null
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "vendor_job_id": {
+                      "type": "string",
+                      "example": "34c4e7623450"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "cancelled"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "job_already_completed"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Job is already in state: success and cannot be cancelled"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "unauthorized"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "You do not have permission to cancel this job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Job not found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "job_not_found"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Job with ID 34c4e7623450 not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "server_error"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "An error occurred while cancelling the job"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/job/result/{vendor_job_id}": {
+      "get": {
+        "tags": ["Job"],
+        "summary": "Get job results",
+        "description": "Retrieves the product results by job ID",
+        "produces": ["application/json"],
+        "security": [
+          {
+            "ApiKeyAuth": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "vendor_job_id",
+            "in": "path",
+            "description": "Job ID to get results for",
+            "required": true,
+            "type": "string"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Job results retrieved successfully",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": true
+                },
+                "code": {
+                  "type": "string",
+                  "example": null
+                },
+                "message": {
+                  "type": "string",
+                  "example": null
+                },
+                "data": {
+                  "type": "object",
+                  "properties": {
+                    "job_id": {
+                      "type": "string",
+                      "example": "34c4e7623450"
+                    },
+                    "status": {
+                      "type": "string",
+                      "example": "success"
+                    },
+                    "created_at": {
+                      "type": "string",
+                      "example": "2023-01-01T00:00:00Z"
+                    },
+                    "completed_at": {
+                      "type": "string",
+                      "example": "2023-01-01T00:01:00Z"
+                    },
+                    "deals": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "deal_id": {
+                            "type": "string",
+                            "example": "1988776.7648272833"
+                          },
+                          "step_id": {
+                            "type": "string",
+                            "example": "123546"
+                          },
+                          "status": {
+                            "type": "integer",
+                            "example": 2
+                          },
+                          "error_message": {
+                            "type": "string",
+                            "example": null
+                          },
+                          "product": {
+                            "type": "object",
+                            "properties": {
+                              "shopee_item_id": {
+                                "type": "string",
+                                "example": "7648272833"
+                              },
+                              "name": {
+                                "type": "string",
+                                "example": "Product Name"
+                              },
+                              "price": {
+                                "type": "number",
+                                "example": 299.0
+                              },
+                              "currency": {
+                                "type": "string",
+                                "example": "TWD"
+                              },
+                              "stock": {
+                                "type": "integer",
+                                "example": 100
+                              },
+                              "sold": {
+                                "type": "integer",
+                                "example": 50
+                              },
+                              "rating": {
+                                "type": "number",
+                                "example": 4.5
+                              },
+                              "shop_name": {
+                                "type": "string",
+                                "example": "Example Shop"
+                              },
+                              "images": {
+                                "type": "array",
+                                "items": {
+                                  "type": "string"
+                                },
+                                "example": [
+                                  "https://cf.shopee.tw/file/123456",
+                                  "https://cf.shopee.tw/file/654321"
+                                ]
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Unauthorized",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "unauthorized"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "You do not have permission to access this job"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Job not found",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "job_not_found"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "Job with ID 34c4e7623450 not found"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Server error",
+            "schema": {
+              "type": "object",
+              "properties": {
+                "success": {
+                  "type": "boolean",
+                  "example": false
+                },
+                "code": {
+                  "type": "string",
+                  "example": "server_error"
+                },
+                "message": {
+                  "type": "string",
+                  "example": "An error occurred while retrieving job results"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

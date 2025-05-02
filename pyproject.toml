@@ -16,4 +16,6 @@ dependencies = [
     "beautifulsoup4>=4.13.4",
     "requests-html>=0.10.0",
     "sqlalchemy==2.0.23",
+    "flasgger>=0.9.7.1",
+    "flask-swagger-ui>=4.11.1",
 ]
