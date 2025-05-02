@@ -1,84 +1,43 @@
-<!DOCTYPE html>
-<html lang="en" data-bs-theme="dark">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Shopee Product Data API</title>
-    <link rel="stylesheet" href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.1/font/bootstrap-icons.css">
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/custom.css') }}">
-</head>
-<body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-dark">
-        <div class="container">
-            <a class="navbar-brand" href="/">Shopee Product Data API</a>
-            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation">
-                <span class="navbar-toggler-icon"></span>
-            </button>
-            <div class="collapse navbar-collapse" id="navbarNav">
-                <ul class="navbar-nav">
-                    <li class="nav-item">
-                        <a class="nav-link active" aria-current="page" href="/">Home</a>
-                    </li>
-                    <li class="nav-item">
-                        <a class="nav-link" href="/docs">API Documentation</a>
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </nav>
+{% extends 'layout.html' %}
+{% block title %}Shopee Data API - Home{% endblock %}
 
-    <div class="container mt-5">
-        <div class="row">
-            <div class="col-md-8 offset-md-2 text-center">
-                <h1 class="display-4">Shopee Product Data API</h1>
-                <p class="lead mt-4">A powerful API service to fetch and store product data from Shopee Taiwan.</p>
-                <hr class="my-4">
-                <p>Use our API to retrieve product details from Shopee's API endpoint and batch process multiple product IDs efficiently.</p>
-                <div class="d-grid gap-2 d-sm-flex justify-content-sm-center mt-4">
-                    <a href="/login" class="btn btn-primary btn-lg px-4 gap-3">Login</a>
-                    <a href="/docs" class="btn btn-outline-secondary btn-lg px-4">API Documentation</a>
+{% block content %}
+<div class="container mt-5">
+    <div class="row justify-content-center">
+        <div class="col-md-8">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h4 class="mb-0">Welcome to Shopee Data API</h4>
                 </div>
-            </div>
-        </div>
+                <div class="card-body">
+                    <h5 class="card-title">High-Performance Shopee Taiwan Data Scraping</h5>
+                    <p class="card-text">This API service provides fast and reliable access to Shopee Taiwan product data.</p>
+                    
+                    <div class="alert alert-info">
+                        <h6>Important Information</h6>
+                        <p>The default user credentials are:</p>
+                        <ul>
+                            <li><strong>Username:</strong> Mufasa</li>
+                            <li><strong>Password:</strong> password</li>
+                        </ul>
+                    </div>
 
-        <div class="row mt-5">
-            <div class="col-md-4">
-                <div class="card mb-4">
-                    <div class="card-body text-center">
-                        <i class="bi bi-lightning-charge display-4"></i>
-                        <h3 class="card-title mt-3">Fast & Reliable</h3>
-                        <p class="card-text">Process up to 300K items daily with our high-performance infrastructure.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card mb-4">
-                    <div class="card-body text-center">
-                        <i class="bi bi-shield-check display-4"></i>
-                        <h3 class="card-title mt-3">Secure</h3>
-                        <p class="card-text">API key authentication ensures your data remains private and secure.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="card mb-4">
-                    <div class="card-body text-center">
-                        <i class="bi bi-database-check display-4"></i>
-                        <h3 class="card-title mt-3">Comprehensive</h3>
-                        <p class="card-text">Get complete product data in JSON format directly from Shopee's API.</p>
+                    <h5 class="mt-4">Features:</h5>
+                    <ul class="list-group list-group-flush mb-4">
+                        <li class="list-group-item">🚀 High-throughput data extraction from Shopee Taiwan</li>
+                        <li class="list-group-item">📊 Comprehensive product information extraction</li>
+                        <li class="list-group-item">🔄 Process batch CSV imports or individual URLs</li>
+                        <li class="list-group-item">⏱️ Async processing with real-time job status</li>
+                        <li class="list-group-item">🔌 Professional API for integration</li>
+                    </ul>
+
+                    <div class="d-grid gap-2 d-md-flex justify-content-md-center">
+                        <a href="/login" class="btn btn-primary me-md-2">Login</a>
+                        <a href="/api/docs" class="btn btn-secondary">API Documentation</a>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-
-    <footer class="footer mt-5 py-3 bg-dark">
-        <div class="container text-center">
-            <span class="text-muted">© 2025 Shopee Product Data API. All rights reserved.</span>
-        </div>
-    </footer>
-
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-</body>
-</html>
+</div>
+{% endblock %}
