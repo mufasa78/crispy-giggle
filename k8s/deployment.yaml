@@ -1,0 +1,68 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: shopee-scraper-api
+  labels:
+    app: shopee-scraper-api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: shopee-scraper-api
+  template:
+    metadata:
+      labels:
+        app: shopee-scraper-api
+    spec:
+      containers:
+      - name: shopee-scraper-api
+        image: shopee-scraper-api:latest
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5000
+        env:
+        - name: DATABASE_URL
+          valueFrom:
+            secretKeyRef:
+              name: shopee-scraper-secrets
+              key: database-url
+        - name: SESSION_SECRET
+          valueFrom:
+            secretKeyRef:
+              name: shopee-scraper-secrets
+              key: session-secret
+        - name: PORT
+          valueFrom:
+            configMapKeyRef:
+              name: shopee-scraper-config
+              key: port
+        resources:
+          limits:
+            cpu: "500m"
+            memory: "512Mi"
+          requests:
+            cpu: "200m"
+            memory: "256Mi"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 5000
+          initialDelaySeconds: 15
+          periodSeconds: 10
+        volumeMounts:
+        - name: cookies-volume
+          mountPath: /app/cookies.txt
+          subPath: cookies.txt
+      volumes:
+      - name: cookies-volume
+        configMap:
+          name: shopee-scraper-config
+          items:
+          - key: cookies
+            path: cookies.txt

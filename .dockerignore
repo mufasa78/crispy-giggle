@@ -1,6 +1,7 @@
 # Git
 .git
 .gitignore
+.github/
 
 # Python
 __pycache__/
@@ -28,6 +29,7 @@ wheels/
 venv/
 env/
 ENV/
+.venv/
 
 # Environment variables (except sample)
 .env
@@ -47,16 +49,37 @@ logs/
 *.log
 
 # Docker
-Dockerfile
-docker-compose.yml
+docker-compose*.yml
 .dockerignore
+
+# Kubernetes
+k8s/
+
+# SSL certificates
+nginx/ssl/
 
 # Documentation
 README.md
-DEPLOYMENT*.md
-ADMIN_SETUP.md
-dependencies.md
+*.md
+LICENSE
+
+# Scripts
+*.ps1
+*.sh
+generate-*.py
+
+# Test files
+tests/
+test_*.py
+*_test.py
 
 # Temporary files
 .DS_Store
 Thumbs.db
+*.tmp
+*.bak
+*.swp
+*~
+
+# Keep
+!render_requirements.txt

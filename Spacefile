@@ -1,0 +1,15 @@
+v: 0
+app_name: "Shopee Data API"
+micros:
+  - name: shopee-data-api
+    src: ./
+    engine: python3.9
+    primary: true
+    run: gunicorn --bind 0.0.0.0:$PORT --workers=4 --timeout=120 main:app
+    public: true
+    presets:
+      env:
+        - name: DATABASE_URL
+          description: "PostgreSQL database connection URL"
+        - name: SESSION_SECRET
+          description: "Secret key for session management"

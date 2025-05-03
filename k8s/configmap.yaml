@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: shopee-scraper-config
+data:
+  port: "5000"
+  cookies: |
+    # This file will be populated with cookies data when needed

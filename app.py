@@ -5,13 +5,17 @@ from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy.orm import DeclarativeBase
 from werkzeug.middleware.proxy_fix import ProxyFix
 from flask_jwt_extended import JWTManager
+from dotenv import load_dotenv
+
+# Load environment variables from .env file if it exists
+load_dotenv()
 
 # Helper functions for configuration
 def get_database_url():
-    return os.environ.get("DATABASE_URL", "postgresql://shopeescraper_owner:npg_zAhujem75qoK@ep-lucky-math-a4xqp14y-pooler.us-east-1.aws.neon.tech/shopeescraper?sslmode=require")
+    return os.environ.get("DATABASE_URL")
 
 def get_session_secret():
-    return os.environ.get("SESSION_SECRET", "default-secret-key")
+    return os.environ.get("SESSION_SECRET")
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -53,11 +57,11 @@ with app.app_context():
     # Register API routes
     from routes.api import api_bp
     app.register_blueprint(api_bp)
-    
+
     # Import models and create tables
     import models
     db.create_all()
-    
+
     logging.info("Application initialized successfully")
 
 # Ensure the app runs on 0.0.0.0 to make it externally accessible

@@ -49,3 +49,6 @@ Thumbs.db
 # Cookies and cache
 cookies.txt
 .cache/
+
+# Deta Space
+.space/

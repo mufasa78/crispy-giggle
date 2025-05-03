@@ -86,7 +86,7 @@ Response example:
                 {"name": "Material", "value": "Cotton"}
             ],
             "categories": [
-                {"id": 123, "name": "Clothing"}, 
+                {"id": 123, "name": "Clothing"},
                 {"id": 456, "name": "Shirts"}
             ],
             "shipping_options": [
@@ -122,10 +122,111 @@ POST /api/jobs/{job_id}/cancel
 
 ## Installation & Setup
 
+### Using Deta Space (Recommended)
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/mufasa78/crispy-giggle.git
+   cd crispy-giggle
+   ```
+
+2. Install the Space CLI:
+   ```bash
+   # For Windows PowerShell
+   iwr https://get.deta.dev/space-cli.ps1 -useb | iex
+
+   # For Mac/Linux
+   curl -fsSL https://get.deta.dev/space-cli.sh | sh
+   ```
+
+3. Login to Space:
+   ```bash
+   space login
+   ```
+
+4. Initialize your project:
+   ```bash
+   space new
+   ```
+
+5. Deploy your app:
+   ```bash
+   space push
+   ```
+
+6. For detailed instructions, refer to the [DETA_SPACE_DEPLOYMENT.md](DETA_SPACE_DEPLOYMENT.md) file.
+
+### Using Docker Compose
+
+1. Clone the repository:
+   ```bash
+   git clone https://github.com/mufasa78/crispy-giggle.git
+   cd crispy-giggle
+   ```
+
+2. Set up environment variables:
+   ```bash
+   # For Windows PowerShell
+   $env:DATABASE_URL="postgresql://shopeescraper_owner:your-password@ep-lucky-math-a4xqp14y-pooler.us-east-1.aws.neon.tech/shopeescraper?sslmode=require"
+   $env:SESSION_SECRET="your-secure-session-secret"
+
+   # For Linux/Mac
+   export DATABASE_URL="postgresql://shopeescraper_owner:your-password@ep-lucky-math-a4xqp14y-pooler.us-east-1.aws.neon.tech/shopeescraper?sslmode=require"
+   export SESSION_SECRET="your-secure-session-secret"
+   ```
+
+3. Run the deployment script:
+   ```bash
+   # For Windows
+   .\deploy.ps1
+
+   # For Linux/Mac
+   bash deploy.sh
+   ```
+
+4. Access the application:
+   - HTTP: [http://localhost:5000](http://localhost:5000)
+   - HTTPS: [https://localhost](https://localhost) (using self-signed certificate)
+   - API Documentation: [http://localhost:5000/api/docs](http://localhost:5000/api/docs)
+   - Admin Setup: [http://localhost:5000/setup-admin](http://localhost:5000/setup-admin)
+
+### External Access Configuration
+
+The application is configured with Nginx as a reverse proxy to handle SSL termination and external access. The deployment scripts automatically generate self-signed SSL certificates for development purposes.
+
+For production deployment:
+1. Replace the self-signed certificates in `nginx/ssl/` with proper certificates from a trusted CA
+2. Configure your domain name in `nginx/nginx.conf`
+3. Ensure ports 80 and 443 are open on your server
+
+### Using Kubernetes
+
+1. Update the Kubernetes configuration files in the `k8s` directory:
+   ```bash
+   # Edit the secret file to update sensitive information
+   nano k8s/secret.yaml
+
+   # Update the ConfigMap if needed
+   nano k8s/configmap.yaml
+   ```
+
+2. Apply the Kubernetes configuration:
+   ```bash
+   kubectl apply -f k8s/
+   ```
+
+3. For detailed instructions, refer to the [KUBERNETES_DEPLOYMENT.md](KUBERNETES_DEPLOYMENT.md) file.
+
+### Manual Setup
+
 1. Clone the repository
 2. Install dependencies: `pip install -r requirements.txt`
-3. Configure PostgreSQL database in config.py
-4. Run the application: `gunicorn --bind 0.0.0.0:5000 main:app`
+3. Configure environment variables:
+   ```bash
+   export DATABASE_URL="postgresql://shopeescraper_owner:your-password@ep-lucky-math-a4xqp14y-pooler.us-east-1.aws.neon.tech/shopeescraper?sslmode=require"
+   export SESSION_SECRET="your-secure-session-secret"
+   ```
+4. Run the application: `gunicorn --bind 0.0.0.0:5000 --workers=4 --timeout=120 main:app`
 
 ## Architecture
 
